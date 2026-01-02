@@ -1,15 +1,16 @@
 package workspace
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/ishola-faazele/taskflow/internal/shared/domain_errors"
 )
 
-
 type WorkspaceService struct {
-	workspaceRepo   WorkspaceRepository
-	membershipRepo  MembershipRepository
-	invitationRepo  InvitationRepository
+	workspaceRepo  WorkspaceRepository
+	membershipRepo MembershipRepository
+	invitationRepo InvitationRepository
 }
 
 func (s *WorkspaceService) CreateWorkspace(name, ownerID string) (*Workspace, domain_errors.DomainError) {
@@ -19,25 +20,35 @@ func (s *WorkspaceService) CreateWorkspace(name, ownerID string) (*Workspace, do
 	}
 
 	if err := uuid.Validate(ownerID); err != nil {
-		return nil, domain_errors.NewValidationErrorWithValue("ownerID", ownerID, "OWNER ID IS NOT A VALID UUID")
+		return nil, domain_errors.NewValidationErrorWithValue("owner_id", ownerID, "OWNER_ID IS NOT A VALID UUID")
 	}
 
 	workspace := &Workspace{
-		ID:      uuid.NewString(),
-		Name:    name,
-		OwnerID: ownerID,
+		ID:        uuid.NewString(),
+		Name:      name,
+		OwnerID:   ownerID,
+		CreatedAt: time.Now().UTC(),
 	}
 	return s.workspaceRepo.Create(workspace)
 }
 
 func (s *WorkspaceService) GetWorkspaceByID(id string) (*Workspace, domain_errors.DomainError) {
 	if err := uuid.Validate(id); err != nil {
-		return nil, domain_errors.NewValidationErrorWithValue("workspaceID", id, "WorkspaceID is not a valid UUID")
+		return nil, domain_errors.NewValidationErrorWithValue("workspace_id", id, "WORKSPACE_ID IS NOT A VALID UUID")
 	}
 	return s.workspaceRepo.GetByID(id)
 }
 
-func (s *WorkspaceService) UpdateWorkspace(workspace *Workspace) (*Workspace, domain_errors.DomainError) {
+func (s *WorkspaceService) UpdateWorkspace(workspace *Workspace, requesterID string) (*Workspace, domain_errors.DomainError) {
+	if err := uuid.Validate(workspace.ID); err != nil {
+		return nil, domain_errors.NewValidationErrorWithValue("workspace_id", workspace.ID, "WORKSPACE_ID IS NOT A VALID UUID")
+	}
+	if err := uuid.Validate(requesterID); err != nil {
+		return nil, domain_errors.NewValidationErrorWithValue("requester_id", workspace.ID, "REQUESTER_ID IS NOT A VALID UUID")
+	}
+	if requesterID != workspace.OwnerID {
+		return nil, domain_errors.NewUnauthorizedError("REQUESTER IS NOT THE OWNER OF WORKSPACE")
+	}
 	if workspace.Name == "" {
 		return nil, domain_errors.NewValidationErrorWithValue("name", workspace.Name, "EMPTY WORKSPACE NAME")
 	}
@@ -58,7 +69,6 @@ func (s *WorkspaceService) ListWorkspacesByOwner(ownerID string) ([]*Workspace, 
 	return s.workspaceRepo.ListByOwner(ownerID)
 
 }
-
 
 // MEMBERSHIP FUNCTIONS
 

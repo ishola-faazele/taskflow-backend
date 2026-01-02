@@ -19,7 +19,7 @@ func NewWorkspaceHandler(db *sql.DB) (*WorkspaceHandler, error) {
 	workspaceRepo := NewPostgresWorkspaceRepository(db)
 	service := &WorkspaceService{workspaceRepo: workspaceRepo}
 	responder := utils.NewAPIResponder()
-	
+
 	return &WorkspaceHandler{
 		service:   service,
 		responder: responder,
@@ -64,21 +64,16 @@ func (h *WorkspaceHandler) GetWorkspace(w http.ResponseWriter, r *http.Request) 
 
 // UpdateWorkspace handles workspace updates
 func (h *WorkspaceHandler) UpdateWorkspace(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	
-	var req CreateWorkspaceRequest
+	// id := chi.URLParam(r, "id")
+
+	var req *Workspace
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.responder.Error(w, r, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
-	workspace := &Workspace{
-		ID:      id,
-		Name:    req.Name,
-		OwnerID: req.OwnerID,
-	}
-
-	updatedWorkspace, err := h.service.UpdateWorkspace(workspace)
+	// change this to user making request
+	updatedWorkspace, err := h.service.UpdateWorkspace(req, req.OwnerID)
 	if err != nil {
 		h.responder.Error(w, r, http.StatusInternalServerError, "Failed to update workspace", err)
 		return

@@ -7,7 +7,6 @@ import (
 )
 type WorkspaceRouter struct {
 	DB *sql.DB 
-
 }
 func(wr *WorkspaceRouter) RegisterRoutes() *chi.Mux {
 	r := chi.NewRouter()
@@ -15,13 +14,13 @@ func(wr *WorkspaceRouter) RegisterRoutes() *chi.Mux {
 	if err != nil {
 		panic(err)
 	}
-	r.Route("/workspaces", func(r chi.Router) {
+	r.Route("/workspace", func(r chi.Router) {
 		r.Post("/", handler.CreateWorkspace)
 		r.Get("/mine", handler.ListWorkspaces)
+		r.Put("/update", handler.UpdateWorkspace)
 
 		r.Route("/{id}", func(r chi.Router) {
 			r.Get("/", handler.GetWorkspace)
-			r.Put("/", handler.UpdateWorkspace)
 			r.Delete("/", handler.DeleteWorkspace)
 		})
 	})
