@@ -8,14 +8,15 @@ type Workspace struct {
 
 type Membership struct {
 	UserID         string
-	OrganizationID string
+	WorkspaceID string
 	Role           Role
 }
 
 type Invitation struct {
-	Email          string
-	OrganizationID string
+	UserID         string
+	WorkspaceID string
 	Token          string
+	IsValid 		bool
 }
 
 type Role string

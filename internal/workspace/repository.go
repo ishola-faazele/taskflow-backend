@@ -1,11 +1,13 @@
 package workspace
 
+import "github.com/ishola-faazele/taskflow/internal/shared/domain_errors"
+
 type WorkspaceRepository interface {
-	Create(org *Workspace) (*Workspace, error)
-	GetByID(id string) (*Workspace, error)
-	Update(org *Workspace) (*Workspace, error)
-	Delete(id string) error
-	ListByOwner(ownerID string) ([]*Workspace, error)
+	Create(org *Workspace) (*Workspace, domain_errors.DomainError)
+	GetByID(id string) (*Workspace, domain_errors.DomainError)
+	Update(org *Workspace) (*Workspace, domain_errors.DomainError)
+	Delete(id string) domain_errors.DomainError
+	ListByOwner(ownerID string) ([]*Workspace, domain_errors.DomainError)
 }
 
 type MembershipRepository interface {
@@ -18,4 +20,5 @@ type InvitationRepository interface {
 	Create(invitation *Invitation) (*Invitation, error)
 	GetByToken(token string) (*Invitation, error)
 	Delete(token string) error
+	ListInvitationToWorkspace(workspace_id string) ([]*Invitation, error)
 }

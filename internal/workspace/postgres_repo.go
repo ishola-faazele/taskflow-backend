@@ -1,0 +1,310 @@
+package workspace
+
+import (
+	"database/sql"
+	"fmt"
+
+	"github.com/ishola-faazele/taskflow/internal/shared/domain_errors"
+)
+
+type PostgresWorkspaceRepository struct {
+	db *sql.DB
+}
+
+type PostgresMembershipRepository struct {
+	db *sql.DB
+}
+
+type PostgresInvitationRepository struct {
+	db *sql.DB
+}
+
+// NewPostgresWorkspaceRepository creates a new workspace repository
+func NewPostgresWorkspaceRepository(db *sql.DB) *PostgresWorkspaceRepository {
+	return &PostgresWorkspaceRepository{db: db}
+}
+
+// NewPostgresMembershipRepository creates a new membership repository
+func NewPostgresMembershipRepository(db *sql.DB) *PostgresMembershipRepository {
+	return &PostgresMembershipRepository{db: db}
+}
+
+// NewPostgresInvitationRepository creates a new invitation repository
+func NewPostgresInvitationRepository(db *sql.DB) *PostgresInvitationRepository {
+	return &PostgresInvitationRepository{db: db}
+}
+
+// WorkspaceRepository implementation
+
+func (r *PostgresWorkspaceRepository) Create(org *Workspace) (*Workspace, domain_errors.DomainError) {
+	query := `
+		INSERT INTO workspace (id, name, owner_id)
+		VALUES ($1, $2, $3)
+		RETURNING id, name, owner_id
+	`
+	
+	row := r.db.QueryRow(query, org.ID, org.Name, org.OwnerID)
+	
+	result := &Workspace{}
+	err := row.Scan(&result.ID, &result.Name, &result.OwnerID)
+	if err != nil {
+		return nil, domain_errors.NewDatabaseError("workspace creation", err)
+	}
+	
+	return result, nil
+}
+
+func (r *PostgresWorkspaceRepository) GetByID(id string) (*Workspace, domain_errors.DomainError) {
+	query := `
+		SELECT id, name, owner_id
+		FROM workspace
+		WHERE id = $1
+	`
+	
+	row := r.db.QueryRow(query, id)
+	
+	workspace := &Workspace{}
+	err := row.Scan(&workspace.ID, &workspace.Name, &workspace.OwnerID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain_errors.NewNotFoundError("workspace", id)
+		}
+		return nil, domain_errors.NewDatabaseError("workspace query", err)
+	}
+	
+	return workspace, nil
+}
+
+func (r *PostgresWorkspaceRepository) Update(org *Workspace) (*Workspace, domain_errors.DomainError) {
+	query := `
+		UPDATE workspace
+		SET name = $2, owner_id = $3
+		WHERE id = $1
+		RETURNING id, name, owner_id
+	`
+	
+	row := r.db.QueryRow(query, org.ID, org.Name, org.OwnerID)
+	
+	result := &Workspace{}
+	err := row.Scan(&result.ID, &result.Name, &result.OwnerID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil,  domain_errors.NewNotFoundError("workspace", org.ID)
+		}
+		return nil, domain_errors.NewDatabaseError("workspace update", err)
+	}
+	
+	return result, nil
+}
+
+func (r *PostgresWorkspaceRepository) Delete(id string) domain_errors.DomainError {
+	query := `DELETE FROM workspace WHERE id = $1`
+	
+	result, err := r.db.Exec(query, id)
+	if err != nil {
+		return domain_errors.NewDatabaseError("workspace deletion", err)
+	}
+	
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return domain_errors.NewDatabaseError("workspace deletion", err)
+	}
+	
+	if rows == 0 {
+		return domain_errors.NewNotFoundError("workspace", id)
+	}
+	
+	return nil
+}
+
+func (r *PostgresWorkspaceRepository) ListByOwner(ownerID string) ([]*Workspace, domain_errors.DomainError) {
+	query := `
+		SELECT id, name, owner_id
+		FROM workspace
+		WHERE owner_id = $1
+		ORDER BY name
+	`
+	
+	rows, err := r.db.Query(query, ownerID)
+	if err != nil {
+		return nil, domain_errors.NewDatabaseError("workspace query", err)
+	}
+	defer rows.Close()
+	
+	var workspaces []*Workspace
+	for rows.Next() {
+		workspace := &Workspace{}
+		err := rows.Scan(&workspace.ID, &workspace.Name, &workspace.OwnerID)
+		if err != nil {
+			return nil, domain_errors.NewDatabaseError("workspace query", err)
+		}
+		workspaces = append(workspaces, workspace)
+	}
+	
+	if err = rows.Err(); err != nil {
+		return nil, domain_errors.NewDatabaseError("workspace query", err)
+	}
+	
+	return workspaces, nil
+}
+
+// MembershipRepository implementation
+
+func (r *PostgresMembershipRepository) Add(membership *Membership) (*Membership, error) {
+	query := `
+		INSERT INTO membership (user_id, organization_id, role)
+		VALUES ($1, $2, $3)
+		RETURNING user_id, organization_id, role
+	`
+	
+	row := r.db.QueryRow(query, membership.UserID, membership.WorkspaceID, membership.Role)
+	
+	result := &Membership{}
+	err := row.Scan(&result.UserID, &result.WorkspaceID, &result.Role)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add membership: %w", err)
+	}
+	
+	return result, nil
+}
+
+func (r *PostgresMembershipRepository) Remove(userID, organizationID string) error {
+	query := `
+		DELETE FROM membership
+		WHERE user_id = $1 AND organization_id = $2
+	`
+	
+	result, err := r.db.Exec(query, userID, organizationID)
+	if err != nil {
+		return fmt.Errorf("failed to remove membership: %w", err)
+	}
+	
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	
+	if rows == 0 {
+		return fmt.Errorf("membership not found")
+	}
+	
+	return nil
+}
+
+func (r *PostgresMembershipRepository) ListByOrganization(organizationID string) ([]*Membership, error) {
+	query := `
+		SELECT user_id, organization_id, role
+		FROM membership
+		WHERE organization_id = $1
+		ORDER BY user_id
+	`
+	
+	rows, err := r.db.Query(query, organizationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list memberships: %w", err)
+	}
+	defer rows.Close()
+	
+	var memberships []*Membership
+	for rows.Next() {
+		membership := &Membership{}
+		err := rows.Scan(&membership.UserID, &membership.WorkspaceID, &membership.Role)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan membership: %w", err)
+		}
+		memberships = append(memberships, membership)
+	}
+	
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating memberships: %w", err)
+	}
+	
+	return memberships, nil
+}
+
+// InvitationRepository implementation
+
+func (r *PostgresInvitationRepository) Create(invitation *Invitation) (*Invitation, error) {
+	query := `
+		INSERT INTO invitation (user_id, organization_id, token, is_valid)
+		VALUES ($1, $2, $3, $4)
+		RETURNING user_id, organization_id, token, is_valid
+	`
+	
+	row := r.db.QueryRow(query, invitation.UserID, invitation.WorkspaceID, invitation.Token, invitation.IsValid)
+	
+	result := &Invitation{}
+	err := row.Scan(&result.UserID, &result.WorkspaceID, &result.Token, &result.IsValid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create invitation: %w", err)
+	}
+	
+	return result, nil
+}
+
+func (r *PostgresInvitationRepository) GetByToken(token string) (*Invitation, error) {
+	query := `
+		SELECT user_id, organization_id, token, is_valid
+		FROM invitation
+		WHERE token = $1
+	`
+	
+	row := r.db.QueryRow(query, token)
+	
+	invitation := &Invitation{}
+	err := row.Scan(&invitation.UserID, &invitation.WorkspaceID, &invitation.Token, &invitation.IsValid)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("invitation not found")
+		}
+		return nil, fmt.Errorf("failed to get invitation: %w", err)
+	}
+	
+	return invitation, nil
+}
+func (r* PostgresInvitationRepository) ListInvitationToWorkspace(workspace_id string) ([]*Invitation, error) {
+	query := `
+		SELECT user_id, organization_id, token, is_valid
+		FROM invitation
+		WHERE organization_id = $1
+	`
+	
+	rows, err := r.db.Query(query, workspace_id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list memberships: %w", err)
+	}
+	defer rows.Close()
+
+	var invitations []*Invitation
+	for rows.Next() {
+		invitation := &Invitation{}
+		err := rows.Scan(&invitation.UserID, &invitation.WorkspaceID, &invitation.Token, &invitation.IsValid)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil, fmt.Errorf("invitation not found")
+			}
+			return nil, fmt.Errorf("failed to get invitation: %w", err)
+		}
+		invitations = append(invitations, invitation)
+	}
+	return invitations, nil
+} 
+func (r *PostgresInvitationRepository) Delete(token string) error {
+	query := `DELETE FROM invitation WHERE token = $1`
+	
+	result, err := r.db.Exec(query, token)
+	if err != nil {
+		return fmt.Errorf("failed to delete invitation: %w", err)
+	}
+	
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	
+	if rows == 0 {
+		return fmt.Errorf("invitation not found")
+	}
+	
+	return nil
+}
