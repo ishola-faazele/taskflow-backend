@@ -8,6 +8,7 @@ import (
 type WorkspaceRouter struct {
 	DB *sql.DB 
 }
+
 func(wr *WorkspaceRouter) RegisterRoutes() *chi.Mux {
 	r := chi.NewRouter()
 	handler, err := NewWorkspaceHandler(wr.DB)

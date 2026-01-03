@@ -3,19 +3,149 @@ package db
 import (
 	"database/sql"
 	"fmt"
+
 	"github.com/ishola-faazele/taskflow/internal/shared/logger"
 )
 
+// TableDefinition represents a database table with its schema and indices
+type TableDefinition struct {
+	Name         string
+	CreateSQL    string
+	Indices      []string
+	Dependencies []string // Tables this table depends on (for foreign keys)
+}
+
 // MigrationManager handles database schema migrations
 type MigrationManager struct {
-	db *sql.DB
+	db     *sql.DB
 	logger *logger.StdLogger
+	tables []TableDefinition
 }
 
 // NewMigrationManager creates a new migration manager
 func NewMigrationManager(db *sql.DB) *MigrationManager {
 	logger := logger.NewStdLogger()
-	return &MigrationManager{db: db, logger: logger}
+	mgr := &MigrationManager{
+		db:     db,
+		logger: logger,
+		tables: []TableDefinition{},
+	}
+	
+	// Register all tables
+	mgr.registerWorkspaceTables()
+	mgr.registerUserTables()
+	
+	return mgr
+}
+
+// registerWorkspaceTables registers workspace-related tables
+func (m *MigrationManager) registerWorkspaceTables() {
+	// Workspace table
+	m.RegisterTable(TableDefinition{
+		Name: "workspace",
+		CreateSQL: `
+			CREATE TABLE IF NOT EXISTS workspace (
+				id VARCHAR(255) PRIMARY KEY,
+				name VARCHAR(255) NOT NULL,
+				owner_id VARCHAR(255) NOT NULL,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			)
+		`,
+		Indices: []string{
+			`CREATE INDEX IF NOT EXISTS idx_workspace_owner_id ON workspace(owner_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_workspace_name ON workspace(name)`,
+		},
+		Dependencies: []string{},
+	})
+
+	// Membership table
+	m.RegisterTable(TableDefinition{
+		Name: "membership",
+		CreateSQL: `
+			CREATE TABLE IF NOT EXISTS membership (
+				user_id VARCHAR(255) NOT NULL,
+				organization_id VARCHAR(255) NOT NULL,
+				role VARCHAR(50) NOT NULL,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY (user_id, organization_id),
+				CONSTRAINT fk_membership_workspace 
+					FOREIGN KEY (organization_id) 
+					REFERENCES workspace(id) 
+					ON DELETE CASCADE
+			)
+		`,
+		Indices: []string{
+			`CREATE INDEX IF NOT EXISTS idx_membership_organization_id ON membership(organization_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_membership_user_id ON membership(user_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_membership_role ON membership(role)`,
+		},
+		Dependencies: []string{"workspace"},
+	})
+
+	// Invitation table
+	m.RegisterTable(TableDefinition{
+		Name: "invitation",
+		CreateSQL: `
+			CREATE TABLE IF NOT EXISTS invitation (
+				token VARCHAR(255) PRIMARY KEY,
+				email VARCHAR(255) NOT NULL,
+				organization_id VARCHAR(255) NOT NULL,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				expires_at TIMESTAMP,
+				CONSTRAINT fk_invitation_workspace 
+					FOREIGN KEY (organization_id) 
+					REFERENCES workspace(id) 
+					ON DELETE CASCADE
+			)
+		`,
+		Indices: []string{
+			`CREATE INDEX IF NOT EXISTS idx_invitation_email ON invitation(email)`,
+			`CREATE INDEX IF NOT EXISTS idx_invitation_organization_id ON invitation(organization_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_invitation_expires_at ON invitation(expires_at)`,
+		},
+		Dependencies: []string{"workspace"},
+	})
+}
+
+// registerUserTables registers user-related tables
+func (m *MigrationManager) registerUserTables() {
+	// Auth table
+	m.RegisterTable(TableDefinition{
+		Name: "auth",
+		CreateSQL: `
+			CREATE TABLE IF NOT EXISTS auth (
+				id VARCHAR(255) PRIMARY KEY,
+				email VARCHAR(255) NOT NULL UNIQUE,
+				created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)
+		`,
+		Indices: []string{
+			`CREATE INDEX IF NOT EXISTS idx_auth_email ON auth(email)`,
+		},
+		Dependencies: []string{},
+	})
+
+	// User Profile table
+	m.RegisterTable(TableDefinition{
+		Name: "user_profile",
+		CreateSQL: `
+			CREATE TABLE IF NOT EXISTS user_profile (
+				id VARCHAR(255) PRIMARY KEY,
+				name VARCHAR(255) NOT NULL DEFAULT '',
+				CONSTRAINT fk_user_profile_auth
+					FOREIGN KEY (id)
+					REFERENCES auth(id)
+					ON DELETE CASCADE
+			)
+		`,
+		Indices: []string{},
+		Dependencies: []string{"auth"},
+	})
+}
+
+// RegisterTable adds a new table definition to the migration manager
+func (m *MigrationManager) RegisterTable(table TableDefinition) {
+	m.tables = append(m.tables, table)
 }
 
 // tableExists checks if a table exists in the database
@@ -27,245 +157,127 @@ func (m *MigrationManager) tableExists(tableName string) (bool, error) {
 			AND table_name = $1
 		)
 	`
-	
+
 	var exists bool
 	err := m.db.QueryRow(query, tableName).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if table %s exists: %w", tableName, err)
 	}
-	
+
 	return exists, nil
 }
 
-// createWorkspaceTable creates the workspace table with indices
-func (m *MigrationManager) createWorkspaceTable() error {
-	query := `
-		CREATE TABLE IF NOT EXISTS workspace (
-			id VARCHAR(255) PRIMARY KEY,
-			name VARCHAR(255) NOT NULL,
-			owner_id VARCHAR(255) NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)
-	`
-	
-	_, err := m.db.Exec(query)
+// createTable creates a single table with its indices
+func (m *MigrationManager) createTable(table TableDefinition) error {
+	// Create the table
+	_, err := m.db.Exec(table.CreateSQL)
 	if err != nil {
-		return fmt.Errorf("failed to create workspace table: %w", err)
+		return fmt.Errorf("failed to create table %s: %w", table.Name, err)
 	}
-	
-	// Create index on owner_id for faster lookups
-	indexQuery := `
-		CREATE INDEX IF NOT EXISTS idx_workspace_owner_id 
-		ON workspace(owner_id)
-	`
-	
-	_, err = m.db.Exec(indexQuery)
-	if err != nil {
-		return fmt.Errorf("failed to create index on workspace.owner_id: %w", err)
+
+	// Create indices
+	for _, indexSQL := range table.Indices {
+		_, err := m.db.Exec(indexSQL)
+		if err != nil {
+			return fmt.Errorf("failed to create index for table %s: %w", table.Name, err)
+		}
 	}
-	
-	// Create index on name for potential search functionality
-	nameIndexQuery := `
-		CREATE INDEX IF NOT EXISTS idx_workspace_name 
-		ON workspace(name)
-	`
-	
-	_, err = m.db.Exec(nameIndexQuery)
-	if err != nil {
-		return fmt.Errorf("failed to create index on workspace.name: %w", err)
-	}
-	
-	m.logger.Info("Created workspace table with indices")
+
+	m.logger.Info(fmt.Sprintf("Created table '%s' with %d indices", table.Name, len(table.Indices)))
 	return nil
 }
 
-// createMembershipTable creates the membership table with indices
-func (m *MigrationManager) createMembershipTable() error {
-	query := `
-		CREATE TABLE IF NOT EXISTS membership (
-			user_id VARCHAR(255) NOT NULL,
-			organization_id VARCHAR(255) NOT NULL,
-			role VARCHAR(50) NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			PRIMARY KEY (user_id, organization_id),
-			CONSTRAINT fk_membership_workspace 
-				FOREIGN KEY (organization_id) 
-				REFERENCES workspace(id) 
-				ON DELETE CASCADE
-		)
-	`
-	
-	_, err := m.db.Exec(query)
-	if err != nil {
-		return fmt.Errorf("failed to create membership table: %w", err)
-	}
-	
-	// Create index on organization_id for faster lookups
-	indexQuery := `
-		CREATE INDEX IF NOT EXISTS idx_membership_organization_id 
-		ON membership(organization_id)
-	`
-	
-	_, err = m.db.Exec(indexQuery)
-	if err != nil {
-		return fmt.Errorf("failed to create index on membership.organization_id: %w", err)
-	}
-	
-	// Create index on user_id for reverse lookups
-	userIndexQuery := `
-		CREATE INDEX IF NOT EXISTS idx_membership_user_id 
-		ON membership(user_id)
-	`
-	
-	_, err = m.db.Exec(userIndexQuery)
-	if err != nil {
-		return fmt.Errorf("failed to create index on membership.user_id: %w", err)
-	}
-	
-	// Create index on role for role-based queries
-	roleIndexQuery := `
-		CREATE INDEX IF NOT EXISTS idx_membership_role 
-		ON membership(role)
-	`
-	
-	_, err = m.db.Exec(roleIndexQuery)
-	if err != nil {
-		return fmt.Errorf("failed to create index on membership.role: %w", err)
-	}
-	
-	m.logger.Info("Created membership table with indices")
-	return nil
-}
+// sortTablesByDependencies returns tables sorted by their dependencies
+// Tables without dependencies come first, then tables that depend on them
+func (m *MigrationManager) sortTablesByDependencies() []TableDefinition {
+	sorted := []TableDefinition{}
+	processed := make(map[string]bool)
 
-// createInvitationTable creates the invitation table with indices
-func (m *MigrationManager) createInvitationTable() error {
-	query := `
-		CREATE TABLE IF NOT EXISTS invitation (
-			token VARCHAR(255) PRIMARY KEY,
-			email VARCHAR(255) NOT NULL,
-			organization_id VARCHAR(255) NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			expires_at TIMESTAMP,
-			CONSTRAINT fk_invitation_workspace 
-				FOREIGN KEY (organization_id) 
-				REFERENCES workspace(id) 
-				ON DELETE CASCADE
-		)
-	`
-	
-	_, err := m.db.Exec(query)
-	if err != nil {
-		return fmt.Errorf("failed to create invitation table: %w", err)
+	// Helper function to recursively add tables and their dependencies
+	var addTable func(string)
+	addTable = func(tableName string) {
+		if processed[tableName] {
+			return
+		}
+
+		// Find the table definition
+		var table *TableDefinition
+		for i := range m.tables {
+			if m.tables[i].Name == tableName {
+				table = &m.tables[i]
+				break
+			}
+		}
+
+		if table == nil {
+			return
+		}
+
+		// First add all dependencies
+		for _, dep := range table.Dependencies {
+			addTable(dep)
+		}
+
+		// Then add this table
+		if !processed[tableName] {
+			sorted = append(sorted, *table)
+			processed[tableName] = true
+		}
 	}
-	
-	// Create index on email for lookups
-	emailIndexQuery := `
-		CREATE INDEX IF NOT EXISTS idx_invitation_email 
-		ON invitation(email)
-	`
-	
-	_, err = m.db.Exec(emailIndexQuery)
-	if err != nil {
-		return fmt.Errorf("failed to create index on invitation.email: %w", err)
+
+	// Add all tables
+	for _, table := range m.tables {
+		addTable(table.Name)
 	}
-	
-	// Create index on organization_id
-	orgIndexQuery := `
-		CREATE INDEX IF NOT EXISTS idx_invitation_organization_id 
-		ON invitation(organization_id)
-	`
-	
-	_, err = m.db.Exec(orgIndexQuery)
-	if err != nil {
-		return fmt.Errorf("failed to create index on invitation.organization_id: %w", err)
-	}
-	
-	// Create index on expires_at for cleanup queries
-	expiresIndexQuery := `
-		CREATE INDEX IF NOT EXISTS idx_invitation_expires_at 
-		ON invitation(expires_at)
-	`
-	
-	_, err = m.db.Exec(expiresIndexQuery)
-	if err != nil {
-		return fmt.Errorf("failed to create index on invitation.expires_at: %w", err)
-	}
-	
-	m.logger.Info("Created invitation table with indices")
-	return nil
+
+	return sorted
 }
 
 // EnsureTablesExist checks if tables exist and creates them if they don't
 func (m *MigrationManager) EnsureTablesExist() error {
 	m.logger.Info("Checking database schema...")
-	
-	// Check and create workspace table first (since it's referenced by foreign keys)
-	exists, err := m.tableExists("workspace")
-	if err != nil {
-		return err
-	}
-	
-	if !exists {
-		m.logger.Info("workspace table does not exist, creating...")
-		if err := m.createWorkspaceTable(); err != nil {
+
+	// Sort tables by dependencies
+	sortedTables := m.sortTablesByDependencies()
+
+	// Create tables in dependency order
+	for _, table := range sortedTables {
+		exists, err := m.tableExists(table.Name)
+		if err != nil {
 			return err
 		}
-	} else {
-		m.logger.Info("workspace table already exists")
-	}
-	
-	// Check and create membership table
-	exists, err = m.tableExists("membership")
-	if err != nil {
-		return err
-	}
-	
-	if !exists {
-		m.logger.Info("membership table does not exist, creating...")
-		if err := m.createMembershipTable(); err != nil {
-			return err
+
+		if !exists {
+			m.logger.Info(fmt.Sprintf("Table '%s' does not exist, creating...", table.Name))
+			if err := m.createTable(table); err != nil {
+				return err
+			}
+		} else {
+			m.logger.Info(fmt.Sprintf("Table '%s' already exists", table.Name))
 		}
-	} else {
-		m.logger.Info("membership table already exists")
 	}
-	
-	// Check and create invitation table
-	exists, err = m.tableExists("invitation")
-	if err != nil {
-		return err
-	}
-	
-	if !exists {
-		m.logger.Info("invitation table does not exist, creating...")
-		if err := m.createInvitationTable(); err != nil {
-			return err
-		}
-	} else {
-		m.logger.Info("invitation table already exists")
-	}
-	
+
 	m.logger.Info("Database schema is ready")
 	return nil
 }
 
-// DropAllTables drops all workspace-related tables (useful for testing)
+// DropAllTables drops all registered tables (useful for testing)
 func (m *MigrationManager) DropAllTables() error {
 	m.logger.Warn("Dropping all tables...")
+
+	// Get tables in reverse dependency order
+	sortedTables := m.sortTablesByDependencies()
 	
-	queries := []string{
-		"DROP TABLE IF EXISTS invitation CASCADE",
-		"DROP TABLE IF EXISTS membership CASCADE",
-		"DROP TABLE IF EXISTS workspace CASCADE",
-	}
-	
-	for _, query := range queries {
+	// Drop in reverse order to respect foreign key constraints
+	for i := len(sortedTables) - 1; i >= 0; i-- {
+		query := fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", sortedTables[i].Name)
 		_, err := m.db.Exec(query)
 		if err != nil {
-			return fmt.Errorf("failed to drop tables: %w", err)
+			return fmt.Errorf("failed to drop table %s: %w", sortedTables[i].Name, err)
 		}
+		m.logger.Info(fmt.Sprintf("Dropped table '%s'", sortedTables[i].Name))
 	}
-	
+
 	m.logger.Info("All tables dropped")
 	return nil
 }
@@ -275,33 +287,20 @@ func (m *MigrationManager) ResetDatabase() error {
 	if err := m.DropAllTables(); err != nil {
 		return err
 	}
-	
+
 	return m.EnsureTablesExist()
 }
 
-// Example usage function
-// func ExampleUsage() {
-// 	// Connect to database
-// 	db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/dbname?sslmode=disable")
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	defer db.Close()
-	
-// 	// Create migration manager
-// 	migrationMgr := NewMigrationManager(db)
-	
-// 	// Ensure tables exist
-// 	if err := migrationMgr.EnsureTablesExist(); err != nil {
-// 		log.Fatal(err)
-// 	}
-	
-// 	// Now you can use the repositories
-// 	workspaceRepo := NewPostgresWorkspaceRepository(db)
-// 	membershipRepo := NewPostgresMembershipRepository(db)
-// 	invitationRepo := NewPostgresInvitationRepository(db)
-	
-// 	_ = workspaceRepo
-// 	_ = membershipRepo
-// 	_ = invitationRepo
-// }
+// GetTableNames returns all registered table names
+func (m *MigrationManager) GetTableNames() []string {
+	names := make([]string, len(m.tables))
+	for i, table := range m.tables {
+		names[i] = table.Name
+	}
+	return names
+}
+
+// AddCustomTable allows adding tables at runtime (useful for plugins/extensions)
+func (m *MigrationManager) AddCustomTable(table TableDefinition) {
+	m.RegisterTable(table)
+}
