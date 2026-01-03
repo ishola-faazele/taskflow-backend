@@ -34,31 +34,46 @@ func (s *WorkspaceService) CreateWorkspace(name, ownerID string) (*Workspace, do
 
 func (s *WorkspaceService) GetWorkspaceByID(id string) (*Workspace, domain_errors.DomainError) {
 	if err := uuid.Validate(id); err != nil {
-		return nil, domain_errors.NewValidationErrorWithValue("workspace_id", id, "WORKSPACE_ID IS NOT A VALID UUID")
+		return nil, domain_errors.NewValidationErrorWithValue("id", id, "WORKSPACE_ID IS NOT A VALID UUID")
 	}
 	return s.workspaceRepo.GetByID(id)
 }
 
-func (s *WorkspaceService) UpdateWorkspace(workspace *Workspace, requesterID string) (*Workspace, domain_errors.DomainError) {
-	if err := uuid.Validate(workspace.ID); err != nil {
-		return nil, domain_errors.NewValidationErrorWithValue("workspace_id", workspace.ID, "WORKSPACE_ID IS NOT A VALID UUID")
+func (s *WorkspaceService) UpdateWorkspace(id, name, requester string) (*Workspace, domain_errors.DomainError) {
+	if name == "" {
+		return nil, domain_errors.NewValidationErrorWithValue("name", name, "EMPTY WORKSPACE NAME")
 	}
-	if err := uuid.Validate(requesterID); err != nil {
-		return nil, domain_errors.NewValidationErrorWithValue("requester_id", workspace.ID, "REQUESTER_ID IS NOT A VALID UUID")
+	if err := uuid.Validate(id); err != nil {
+		return nil, domain_errors.NewValidationErrorWithValue("workspaceID", id, "WORKSPACE ID IS NOT A VALID UUID")
 	}
-	if requesterID != workspace.OwnerID {
+	if err := uuid.Validate(requester); err != nil {
+		return nil, domain_errors.NewValidationErrorWithValue("requester_id", requester, "REQUESTER_ID IS NOT A VALID UUID")
+	}
+
+	workspace, err := s.GetWorkspaceByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if requester != workspace.OwnerID {
 		return nil, domain_errors.NewUnauthorizedError("REQUESTER IS NOT THE OWNER OF WORKSPACE")
 	}
-	if workspace.Name == "" {
-		return nil, domain_errors.NewValidationErrorWithValue("name", workspace.Name, "EMPTY WORKSPACE NAME")
-	}
+	workspace.Name = name
+
 	return s.workspaceRepo.Update(workspace)
 }
 
-func (s *WorkspaceService) DeleteWorkspace(id string) domain_errors.DomainError {
+func (s *WorkspaceService) DeleteWorkspace(id, requester string) domain_errors.DomainError {
 	if err := uuid.Validate(id); err != nil {
 		return domain_errors.NewValidationErrorWithValue("workspaceID", id, "WorkspaceID is not a valid UUID")
 	}
+	ws, err := s.GetWorkspaceByID(id)
+	if err != nil {
+		return err
+	}
+	if ws.OwnerID != requester {
+		return domain_errors.NewUnauthorizedError("REQUESTER IS NOT THE OWNER OF WORKSPACE")
+	}
+
 	return s.workspaceRepo.Delete(id)
 }
 

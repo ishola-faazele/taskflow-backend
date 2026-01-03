@@ -3,21 +3,14 @@ package user
 import (
 	"database/sql"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 )
 
 type UserRouter struct {
-	DB *sql.DB
 }
 
-func (ur *UserRouter) RegisterRoutes() *chi.Mux {
-	r := chi.NewRouter()
-	handler := NewUserHandler(ur.DB)
-
-	r.Route("/user", func(r chi.Router) {
-		r.Post("/magic-link", handler.RequestMagicLink)
-		r.Get("/verify", handler.VerifyToken)
-	})
-
-	return r
+func RegisterRoutes(r chi.Router, DB *sql.DB) {
+	handler := NewUserHandler(DB)
+	r.Post("/magic-link", handler.RequestMagicLink)
+	r.Get("/verify", handler.VerifyToken)
 }

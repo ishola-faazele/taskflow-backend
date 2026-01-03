@@ -1,6 +1,7 @@
 package user
 
 import (
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,17 +11,28 @@ import (
 )
 
 type UserService struct {
-	authRepo    AuthRepository
-	profileRepo UserProfileRepository
-	jwtUtil     *jwt.JWTUtils
+	authRepo     AuthRepository
+	profileRepo  UserProfileRepository
+	jwtUtil      *jwt.JWTUtils
+	emailService *utils.EmailService
 }
 
 func NewUserService(authRepo AuthRepository, profileRepo UserProfileRepository) *UserService {
-	jwtUtil := jwt.NewJWTUtils("your-secret-key", "your-app-name", jwt.DefaultTokenConfig())
+	jwtUtil := jwt.NewJWTUtils(jwt.DefaultTokenConfig())
+	emailConfig := utils.EmailConfig{
+		SMTPHost:    os.Getenv("SMTP_HOST"),
+		SMTPPort:    "587",
+		SenderEmail: os.Getenv("SMTP_USER"),
+		SenderName:  "TaskFlow Support",
+		AppPassword: os.Getenv("SMTP_PASS"),
+		FrontendURL: "http://localhost:3000",
+	}
+	emailService := utils.NewEmailService(emailConfig)
 	return &UserService{
-		authRepo:    authRepo,
-		profileRepo: profileRepo,
-		jwtUtil:     jwtUtil,
+		authRepo:     authRepo,
+		profileRepo:  profileRepo,
+		jwtUtil:      jwtUtil,
+		emailService: emailService,
 	}
 }
 
@@ -49,12 +61,15 @@ func (us *UserService) GetMagicLink(email string) domain_errors.DomainError {
 	}
 
 	// create token using auth as claim
-	authToken, token_err := us.jwtUtil.GenerateAuthToken(email, user.ID)
+	authToken, token_err := us.jwtUtil.GenerateAuthToken(user.ID, email)
 	if token_err != nil {
 		return domain_errors.NewInternalError("FAILED TO GENERATE TOKEN", token_err)
 	}
 	// send email with magic link
-	_ = authToken // TODO: use this token to create magic link and send email
+	email_err := us.emailService.SendMagicLink(email, authToken)
+	if email_err != nil {
+		return domain_errors.NewInternalError("FAILED TO SEND MAGIC LINK EMAIL", email_err)
+	}
 	return nil
 }
 

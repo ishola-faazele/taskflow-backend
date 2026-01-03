@@ -1,6 +1,7 @@
 package jwt
 
 import (
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -23,15 +24,17 @@ type TokenConfig struct {
 // DefaultTokenConfig returns sensible defaults for token durations
 func DefaultTokenConfig() TokenConfig {
 	return TokenConfig{
-		AccessTokenDuration:  15 * time.Minute,   // Short-lived for security
-		AuthTokenDuration:    1 * time.Hour,      // Medium-lived for authentication flows
-		RefreshTokenDuration: 7 * 24 * time.Hour, // Long-lived (7 days)
+		AccessTokenDuration:  15000 * time.Minute, // Short-lived for security
+		AuthTokenDuration:    15 * time.Minute,    // Medium-lived for authentication flows
+		RefreshTokenDuration: 7 * 24 * time.Hour,  // Long-lived (7 days)
 	}
 }
 
 // NewJWTUtils creates a new JWTUtils with the provided secret key and issuer
-func NewJWTUtils(secretKey, issuer string, config TokenConfig) *JWTUtils {
-	if config == (TokenConfig{}) { // Check if config is zero-valued
+func NewJWTUtils(config TokenConfig) *JWTUtils {
+	secretKey := os.Getenv("JWT_SECRET_KEY")
+	issuer := os.Getenv("JWT_ISSUER")
+	if config == (TokenConfig{}) {
 		config = DefaultTokenConfig()
 	}
 	return &JWTUtils{

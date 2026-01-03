@@ -77,7 +77,7 @@ func (e *EmailService) createMagicLinkHTML(email, verifyURL string) string {
                                 Hello,
                             </p>
                             <p style="margin: 0 0 20px 0; color: #666666; font-size: 16px; line-height: 1.5;">
-                                Click the button below to sign in to your account. This link will expire in 1 hour for security reasons.
+                                Click the button below to sign in to your account. This link will expire in 15 minutes for security reasons.
                             </p>
                             
                             <!-- Button -->

@@ -3,29 +3,19 @@ package workspace
 import (
 	"database/sql"
 
-	"github.com/go-chi/chi"
+	domain_middleware "github.com/ishola-faazele/taskflow/internal/middleware"
+
+	"github.com/go-chi/chi/v5"
 )
-type WorkspaceRouter struct {
-	DB *sql.DB 
-}
 
-func(wr *WorkspaceRouter) RegisterRoutes() *chi.Mux {
-	r := chi.NewRouter()
-	handler, err := NewWorkspaceHandler(wr.DB)
-	if err != nil {
-		panic(err)
-	}
-	r.Route("/workspace", func(r chi.Router) {
-		r.Post("/", handler.CreateWorkspace)
-		r.Get("/mine", handler.ListWorkspaces)
-		r.Put("/update", handler.UpdateWorkspace)
+func RegisterRoutes(r chi.Router, DB *sql.DB) {
+	dm := domain_middleware.NewDomainMiddleware()
+	handler := NewWorkspaceHandler(DB)
+	r.Use(dm.Authenticate)
 
-		r.Route("/{id}", func(r chi.Router) {
-			r.Get("/", handler.GetWorkspace)
-			r.Delete("/", handler.DeleteWorkspace)
-		})
-	})
-
-  	return r
-  	
+	r.Post("/", handler.CreateWorkspace)
+	r.Get("/mine", handler.ListWorkspaces)
+	r.Put("/{id}", handler.UpdateWorkspace)
+	r.Get("/{id}", handler.GetWorkspace)
+	r.Delete("/{id}", handler.DeleteWorkspace)
 }

@@ -99,8 +99,10 @@ func (a *APIResponder) Error(w http.ResponseWriter, r *http.Request, statusCode 
 	}
 
 	// Add error details if available
-	errorResponse.Details = map[string]interface{}{
-		"error": err.Error(),
+	if err != nil {
+		errorResponse.Details = map[string]interface{}{
+			"error": err.Error(),
+		}
 	}
 
 	if encodeErr := json.NewEncoder(w).Encode(errorResponse); encodeErr != nil {
