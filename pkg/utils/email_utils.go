@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"log"
 	"net/smtp"
 	"regexp"
 	"strings"
@@ -36,27 +37,94 @@ func NewEmailService(config EmailConfig) *EmailService {
 	}
 }
 
-// SendMagicLink sends a magic link email to the user
-func (e *EmailService) SendMagicLink(toEmail, token string) error {
-	// Construct the verification URL
-	verifyURL := fmt.Sprintf("%s/api/user/verify?token=%s", e.config.FrontendURL, token)
-
-	// Create email subject and body
-	subject := "Your Magic Link to Sign In"
-	body := e.createMagicLinkHTML(toEmail, verifyURL)
-
-	return e.sendEmail(toEmail, subject, body)
+// EmailTemplate defines the structure for email content
+type EmailTemplate struct {
+	Subject     string
+	Heading     string
+	Greeting    string
+	MainMessage string
+	ButtonText  string
+	ButtonURL   string
+	FooterNote  string
+	ExpiryNote  string
 }
 
-// createMagicLinkHTML creates a nicely formatted HTML email
-func (e *EmailService) createMagicLinkHTML(email, verifyURL string) string {
+// SendMagicLink sends a magic link email to the user
+func (e *EmailService) SendMagicLink(toEmail, token, verifyURL string) error {
+	// Construct the verification URL
+	fullURL := fmt.Sprintf("%s%s%s", e.config.FrontendURL, verifyURL, token)
+
+	template := EmailTemplate{
+		Subject:     "Your Magic Link to Sign In",
+		Heading:     "Sign in to TaskFlow",
+		Greeting:    "Hello,",
+		MainMessage: "Click the button below to sign in to your account. This link will expire in 15 minutes for security reasons.",
+		ButtonText:  "Sign In Now",
+		ButtonURL:   fullURL,
+		FooterNote:  "If you didn't request this email, you can safely ignore it.",
+		ExpiryNote:  "This link will expire in 15 minutes.",
+	}
+
+	body := e.createEmailHTML(template)
+	return e.sendEmail(toEmail, template.Subject, body)
+}
+
+// SendInvitationLink sends an invitation email to join a workspace
+func (e *EmailService) SendInvitationLink(toEmail, workspaceName, role, token, invitationURL string) error {
+	// Construct the invitation URL
+	fullURL := fmt.Sprintf("%s%s%s", e.config.FrontendURL, invitationURL, token)
+
+	template := EmailTemplate{
+		Subject:     fmt.Sprintf("You've been invited to join %s", workspaceName),
+		Heading:     fmt.Sprintf("Join %s on TaskFlow", workspaceName),
+		Greeting:    "Hello,",
+		MainMessage: fmt.Sprintf("You have been invited to join the %s workspace as a %s. Click the button below to accept the invitation and get started.", workspaceName, role),
+		ButtonText:  "Accept Invitation",
+		ButtonURL:   fullURL,
+		FooterNote:  "If you don't want to accept this invitation, you can safely ignore this email.",
+		ExpiryNote:  "This invitation will expire in 24 hours.",
+	}
+
+	body := e.createEmailHTML(template)
+	return e.sendEmail(toEmail, template.Subject, body)
+}
+
+// SendPasswordResetLink sends a password reset email
+func (e *EmailService) SendPasswordResetLink(toEmail, token, resetURL string) error {
+	// Construct the reset URL
+	fullURL := fmt.Sprintf("%s%s%s", e.config.FrontendURL, resetURL, token)
+
+	template := EmailTemplate{
+		Subject:     "Reset Your Password",
+		Heading:     "Password Reset Request",
+		Greeting:    "Hello,",
+		MainMessage: "We received a request to reset your password. Click the button below to create a new password.",
+		ButtonText:  "Reset Password",
+		ButtonURL:   fullURL,
+		FooterNote:  "If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.",
+		ExpiryNote:  "This link will expire in 1 hour.",
+	}
+	log.Println("Template Created")
+	body := e.createEmailHTML(template)
+	log.Println("HTML Body Created")
+	return e.sendEmail(toEmail, template.Subject, body)
+}
+
+// SendCustomEmail sends an email with custom template
+func (e *EmailService) SendCustomEmail(toEmail string, template EmailTemplate) error {
+	body := e.createEmailHTML(template)
+	return e.sendEmail(toEmail, template.Subject, body)
+}
+
+// createEmailHTML creates a nicely formatted HTML email from template
+func (e *EmailService) createEmailHTML(template EmailTemplate) string {
 	return fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Magic Link Sign In</title>
+    <title>%s</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
     <table role="presentation" style="width: 100%%; border-collapse: collapse;">
@@ -66,7 +134,7 @@ func (e *EmailService) createMagicLinkHTML(email, verifyURL string) string {
                     <!-- Header -->
                     <tr>
                         <td style="padding: 40px 40px 20px 40px; text-align: center;">
-                            <h1 style="margin: 0; color: #333333; font-size: 24px;">Sign in to TaskFlow</h1>
+                            <h1 style="margin: 0; color: #333333; font-size: 24px;">%s</h1>
                         </td>
                     </tr>
                     
@@ -74,10 +142,10 @@ func (e *EmailService) createMagicLinkHTML(email, verifyURL string) string {
                     <tr>
                         <td style="padding: 20px 40px;">
                             <p style="margin: 0 0 20px 0; color: #666666; font-size: 16px; line-height: 1.5;">
-                                Hello,
+                                %s
                             </p>
                             <p style="margin: 0 0 20px 0; color: #666666; font-size: 16px; line-height: 1.5;">
-                                Click the button below to sign in to your account. This link will expire in 15 minutes for security reasons.
+                                %s
                             </p>
                             
                             <!-- Button -->
@@ -85,7 +153,7 @@ func (e *EmailService) createMagicLinkHTML(email, verifyURL string) string {
                                 <tr>
                                     <td align="center">
                                         <a href="%s" style="display: inline-block; padding: 16px 40px; background-color: #4F46E5; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600;">
-                                            Sign In Now
+                                            %s
                                         </a>
                                     </td>
                                 </tr>
@@ -104,10 +172,10 @@ func (e *EmailService) createMagicLinkHTML(email, verifyURL string) string {
                     <tr>
                         <td style="padding: 30px 40px; border-top: 1px solid #eeeeee;">
                             <p style="margin: 0; color: #999999; font-size: 12px; line-height: 1.5;">
-                                If you didn't request this email, you can safely ignore it.
+                                %s
                             </p>
                             <p style="margin: 10px 0 0 0; color: #999999; font-size: 12px;">
-                                This link will expire in 15 minutes.
+                                %s
                             </p>
                         </td>
                     </tr>
@@ -126,7 +194,17 @@ func (e *EmailService) createMagicLinkHTML(email, verifyURL string) string {
     </table>
 </body>
 </html>
-`, verifyURL, verifyURL)
+`,
+		template.Subject,
+		template.Heading,
+		template.Greeting,
+		template.MainMessage,
+		template.ButtonURL,
+		template.ButtonText,
+		template.ButtonURL,
+		template.FooterNote,
+		template.ExpiryNote,
+	)
 }
 
 // sendEmail sends an email using Gmail SMTP
@@ -170,25 +248,8 @@ func (e *EmailService) buildEmailMessage(from, to, subject, htmlBody string) str
 	return msg.String()
 }
 
-// SendPlainTextMagicLink sends a plain text version (fallback)
-func (e *EmailService) SendPlainTextMagicLink(toEmail, token string) error {
-	verifyURL := fmt.Sprintf("%s/api/user/verify?token=%s", e.config.FrontendURL, token)
-
-	subject := "Your Magic Link to Sign In"
-	body := fmt.Sprintf(`Hello,
-
-		Click the link below to sign in to your TaskFlow account:
-
-		%s
-
-		This link will expire in 1 hour for security reasons.
-
-		If you didn't request this email, you can safely ignore it.
-
-		Best regards,
-		TaskFlow Team`,
-		verifyURL)
-
+// SendPlainTextEmail sends a plain text version (fallback)
+func (e *EmailService) SendPlainTextEmail(toEmail, subject, body string) error {
 	// Set up authentication
 	auth := smtp.PlainAuth(
 		"",

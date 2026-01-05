@@ -10,15 +10,15 @@ type WorkspaceRepository interface {
 	ListByOwner(ownerID string) ([]*Workspace, domain_errors.DomainError)
 }
 
-type MembershipRepository interface {
-	Add(membership *Membership) (*Membership, error)
-	Remove(userID, organizationID string) error
-	ListByOrganization(organizationID string) ([]*Membership, error)
+type InvitationRepository interface {
+	Create(invitation *Invitation) (*Invitation, domain_errors.DomainError)
+	GetByID(id string) (*Invitation, domain_errors.DomainError)
+	DeleteInvitation(id string) domain_errors.DomainError
+	ListInvitationToWorkspace(ws_id string) ([]*Invitation, domain_errors.DomainError)
 }
 
-type InvitationRepository interface {
-	Create(invitation *Invitation) (*Invitation, error)
-	GetByToken(token string) (*Invitation, error)
-	Delete(token string) error
-	ListInvitationToWorkspace(workspace_id string) ([]*Invitation, error)
+type MembershipRepository interface {
+	Add(membership *Membership) (*Membership, error)
+	Remove(userID, workspaceID string) error
+	ListByWorkspace(workspaceID string) ([]*Membership, error)
 }

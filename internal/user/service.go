@@ -66,7 +66,7 @@ func (us *UserService) GetMagicLink(email string) domain_errors.DomainError {
 		return domain_errors.NewInternalError("FAILED TO GENERATE TOKEN", token_err)
 	}
 	// send email with magic link
-	email_err := us.emailService.SendMagicLink(email, authToken)
+	email_err := us.emailService.SendMagicLink(email, authToken, "/api/user/verify?token=")
 	if email_err != nil {
 		return domain_errors.NewInternalError("FAILED TO SEND MAGIC LINK EMAIL", email_err)
 	}
@@ -75,7 +75,7 @@ func (us *UserService) GetMagicLink(email string) domain_errors.DomainError {
 
 func (us *UserService) VerifyToken(token string) (string, string, domain_errors.DomainError) {
 	// check if token is signed and is valid purpose(login)
-	claims, err := us.jwtUtil.ParseToken(token)
+	claims, err := us.jwtUtil.ParseUserToken(token)
 	if err != nil {
 		return "", "", domain_errors.NewInternalError("ERROR PARSING TOKEN", err)
 	}

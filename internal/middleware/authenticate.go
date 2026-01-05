@@ -27,7 +27,7 @@ func (dm *DomainMiddleware) Authenticate(next http.Handler) http.Handler {
 		}
 
 		// parse token
-		claims, err := dm.jwt.ParseToken(token)
+		claims, err := dm.jwt.ParseUserToken(token)
 		if err != nil {
 			dm.responder.Error(w, r, http.StatusUnauthorized, "Unauthorized: Invalid token", nil)
 			return

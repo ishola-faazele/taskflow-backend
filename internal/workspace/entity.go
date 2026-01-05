@@ -9,17 +9,22 @@ type Workspace struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type Invitation struct {
+	ID           string    `json:"id"`
+	WorkspaceID  string    `json:"workspace_id"`
+	InviterID    string    `json:"inviter_id"`
+	InviteeEmail string    `json:"invitee_email"`
+	InviteeID    string    `json:"invitee_id"`
+	Role         Role      `json:"role"`
+	IsValid      bool      `json:"is_valid"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 type Membership struct {
 	UserID      string
 	WorkspaceID string
 	Role        Role
-}
-
-type Invitation struct {
-	UserID      string
-	WorkspaceID string
-	Token       string
-	IsValid     bool
+	CreatedAt   time.Time
 }
 
 type Role string

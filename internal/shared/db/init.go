@@ -30,11 +30,11 @@ func NewMigrationManager(db *sql.DB) *MigrationManager {
 		logger: logger,
 		tables: []TableDefinition{},
 	}
-	
+
 	// Register all tables
 	mgr.registerWorkspaceTables()
 	mgr.registerUserTables()
-	
+
 	return mgr
 }
 
@@ -64,18 +64,22 @@ func (m *MigrationManager) registerWorkspaceTables() {
 		CreateSQL: `
 			CREATE TABLE IF NOT EXISTS membership (
 				user_id VARCHAR(255) NOT NULL,
-				organization_id VARCHAR(255) NOT NULL,
+				workspace_id VARCHAR(255) NOT NULL,
 				role VARCHAR(50) NOT NULL,
 				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				PRIMARY KEY (user_id, organization_id),
+				PRIMARY KEY (user_id, workspace_id),
 				CONSTRAINT fk_membership_workspace 
-					FOREIGN KEY (organization_id) 
+					FOREIGN KEY (workspace_id)
 					REFERENCES workspace(id) 
+					ON DELETE CASCADE,
+				CONSTRAINT fk_membership_user
+					FOREIGN KEY (user_id)
+					REFERENCES auth(id)
 					ON DELETE CASCADE
 			)
 		`,
 		Indices: []string{
-			`CREATE INDEX IF NOT EXISTS idx_membership_organization_id ON membership(organization_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_membership_workspace_id ON membership(workspace_id)`,
 			`CREATE INDEX IF NOT EXISTS idx_membership_user_id ON membership(user_id)`,
 			`CREATE INDEX IF NOT EXISTS idx_membership_role ON membership(role)`,
 		},
@@ -86,24 +90,37 @@ func (m *MigrationManager) registerWorkspaceTables() {
 	m.RegisterTable(TableDefinition{
 		Name: "invitation",
 		CreateSQL: `
-			CREATE TABLE IF NOT EXISTS invitation (
-				token VARCHAR(255) PRIMARY KEY,
-				email VARCHAR(255) NOT NULL,
-				organization_id VARCHAR(255) NOT NULL,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				expires_at TIMESTAMP,
-				CONSTRAINT fk_invitation_workspace 
-					FOREIGN KEY (organization_id) 
-					REFERENCES workspace(id) 
-					ON DELETE CASCADE
-			)
-		`,
+		CREATE TABLE IF NOT EXISTS invitation (
+			id VARCHAR(255) PRIMARY KEY,
+			invitee_id VARCHAR(255),
+			invitee_email VARCHAR(255) NOT NULL,
+			inviter_id VARCHAR(255) NOT NULL,
+			workspace_id VARCHAR(255) NOT NULL,
+			role VARCHAR(50) NOT NULL,
+			is_valid BOOLEAN DEFAULT TRUE,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT fk_invitation_workspace 
+				FOREIGN KEY (workspace_id) 
+				REFERENCES workspace(id) 
+				ON DELETE CASCADE,
+			CONSTRAINT fk_invitation_inviter
+				FOREIGN KEY (inviter_id)
+				REFERENCES auth(id)
+				ON DELETE CASCADE,
+			CONSTRAINT fk_invitation_invitee
+				FOREIGN KEY (invitee_id)
+				REFERENCES auth(id)
+				ON DELETE CASCADE
+		)
+	`,
 		Indices: []string{
-			`CREATE INDEX IF NOT EXISTS idx_invitation_email ON invitation(email)`,
-			`CREATE INDEX IF NOT EXISTS idx_invitation_organization_id ON invitation(organization_id)`,
-			`CREATE INDEX IF NOT EXISTS idx_invitation_expires_at ON invitation(expires_at)`,
+			`CREATE INDEX IF NOT EXISTS idx_invitation_invitee_email ON invitation(invitee_email)`,
+			`CREATE INDEX IF NOT EXISTS idx_invitation_workspace_id ON invitation(workspace_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_invitation_inviter_id ON invitation(inviter_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_invitation_is_valid ON invitation(is_valid)`,
+			`CREATE INDEX IF NOT EXISTS idx_invitation_invitee_id ON invitation(invitee_id)`,
 		},
-		Dependencies: []string{"workspace"},
+		Dependencies: []string{"workspace", "auth"},
 	})
 }
 
@@ -138,7 +155,7 @@ func (m *MigrationManager) registerUserTables() {
 					ON DELETE CASCADE
 			)
 		`,
-		Indices: []string{},
+		Indices:      []string{},
 		Dependencies: []string{"auth"},
 	})
 }
@@ -267,7 +284,7 @@ func (m *MigrationManager) DropAllTables() error {
 
 	// Get tables in reverse dependency order
 	sortedTables := m.sortTablesByDependencies()
-	
+
 	// Drop in reverse order to respect foreign key constraints
 	for i := len(sortedTables) - 1; i >= 0; i-- {
 		query := fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", sortedTables[i].Name)

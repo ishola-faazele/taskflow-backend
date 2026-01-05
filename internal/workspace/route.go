@@ -13,9 +13,21 @@ func RegisterRoutes(r chi.Router, DB *sql.DB) {
 	handler := NewWorkspaceHandler(DB)
 	r.Use(dm.Authenticate)
 
+	// Workspace routes
 	r.Post("/", handler.CreateWorkspace)
 	r.Get("/mine", handler.ListWorkspaces)
 	r.Put("/{id}", handler.UpdateWorkspace)
 	r.Get("/{id}", handler.GetWorkspace)
 	r.Delete("/{id}", handler.DeleteWorkspace)
+
+	// Invitation routes
+	r.Post("/invitation", handler.CreateInvitation)
+	r.Get("/invitation", handler.ListWorkspaceInvitations)
+	r.Get("/invitation/{id}", handler.GetInvitation)
+	r.Delete("/invitation/{id}", handler.DeleteInvitation)
+
+	// Membership routes
+	r.Get("/membership/add", handler.AddMembership)
+	r.Get("/membership", handler.ListWorkspaceMembers)
+	r.Post("/membership/remove", handler.RemoveMembership)
 }

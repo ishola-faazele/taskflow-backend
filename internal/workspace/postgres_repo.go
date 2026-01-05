@@ -152,15 +152,15 @@ func (r *PostgresWorkspaceRepository) ListByOwner(ownerID string) ([]*Workspace,
 
 func (r *PostgresMembershipRepository) Add(membership *Membership) (*Membership, error) {
 	query := `
-		INSERT INTO membership (user_id, organization_id, role)
-		VALUES ($1, $2, $3)
-		RETURNING user_id, organization_id, role
+		INSERT INTO membership (user_id, workspace_id, role, created_at)
+		VALUES ($1, $2, $3, $4)
+		RETURNING user_id, workspace_id, role, created_at
 	`
 
-	row := r.db.QueryRow(query, membership.UserID, membership.WorkspaceID, membership.Role)
+	row := r.db.QueryRow(query, membership.UserID, membership.WorkspaceID, membership.Role, membership.CreatedAt)
 
 	result := &Membership{}
-	err := row.Scan(&result.UserID, &result.WorkspaceID, &result.Role)
+	err := row.Scan(&result.UserID, &result.WorkspaceID, &result.Role, &result.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add membership: %w", err)
 	}
@@ -171,7 +171,7 @@ func (r *PostgresMembershipRepository) Add(membership *Membership) (*Membership,
 func (r *PostgresMembershipRepository) Remove(userID, organizationID string) error {
 	query := `
 		DELETE FROM membership
-		WHERE user_id = $1 AND organization_id = $2
+		WHERE user_id = $1 AND workspace_id = $2
 	`
 
 	result, err := r.db.Exec(query, userID, organizationID)
@@ -191,15 +191,15 @@ func (r *PostgresMembershipRepository) Remove(userID, organizationID string) err
 	return nil
 }
 
-func (r *PostgresMembershipRepository) ListByOrganization(organizationID string) ([]*Membership, error) {
+func (r *PostgresMembershipRepository) ListByWorkspace(workspaceID string) ([]*Membership, error) {
 	query := `
-		SELECT user_id, organization_id, role
+		SELECT user_id, workspace_id, role, created_at
 		FROM membership
-		WHERE organization_id = $1
+		WHERE workspace_id = $1
 		ORDER BY user_id
 	`
 
-	rows, err := r.db.Query(query, organizationID)
+	rows, err := r.db.Query(query, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list memberships: %w", err)
 	}
@@ -208,7 +208,7 @@ func (r *PostgresMembershipRepository) ListByOrganization(organizationID string)
 	var memberships []*Membership
 	for rows.Next() {
 		membership := &Membership{}
-		err := rows.Scan(&membership.UserID, &membership.WorkspaceID, &membership.Role)
+		err := rows.Scan(&membership.UserID, &membership.WorkspaceID, &membership.Role, &membership.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan membership: %w", err)
 		}
@@ -224,87 +224,89 @@ func (r *PostgresMembershipRepository) ListByOrganization(organizationID string)
 
 // InvitationRepository implementation
 
-func (r *PostgresInvitationRepository) Create(invitation *Invitation) (*Invitation, error) {
+func (r *PostgresInvitationRepository) Create(invitation *Invitation) (*Invitation, domain_errors.DomainError) {
 	query := `
-		INSERT INTO invitation (user_id, organization_id, token, is_valid)
-		VALUES ($1, $2, $3, $4)
-		RETURNING user_id, organization_id, token, is_valid
+		INSERT INTO invitation (id, invitee_id, invitee_email, inviter_id, workspace_id, role, is_valid, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id, invitee_id, invitee_email, inviter_id, workspace_id, role, is_valid, created_at
 	`
 
-	row := r.db.QueryRow(query, invitation.UserID, invitation.WorkspaceID, invitation.Token, invitation.IsValid)
+	row := r.db.QueryRow(query, invitation.ID, invitation.InviteeID, invitation.InviteeEmail, invitation.InviterID, invitation.WorkspaceID, invitation.Role, invitation.IsValid, invitation.CreatedAt)
 
 	result := &Invitation{}
-	err := row.Scan(&result.UserID, &result.WorkspaceID, &result.Token, &result.IsValid)
+	err := row.Scan(&result.ID, &result.InviteeID, &result.InviteeEmail, &result.InviterID, &result.WorkspaceID, &result.Role, &result.IsValid, &result.CreatedAt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create invitation: %w", err)
+		return nil, domain_errors.NewDatabaseError("FAILED CREATING INVITATION", err)
 	}
 
 	return result, nil
 }
 
-func (r *PostgresInvitationRepository) GetByToken(token string) (*Invitation, error) {
+func (r *PostgresInvitationRepository) GetByID(id string) (*Invitation, domain_errors.DomainError) {
 	query := `
-		SELECT user_id, organization_id, token, is_valid
+		SELECT id, invitee_id, invitee_email, inviter_id, workspace_id, role, is_valid, created_at
 		FROM invitation
-		WHERE token = $1
+		WHERE id = $1
 	`
 
-	row := r.db.QueryRow(query, token)
+	row := r.db.QueryRow(query, id)
 
-	invitation := &Invitation{}
-	err := row.Scan(&invitation.UserID, &invitation.WorkspaceID, &invitation.Token, &invitation.IsValid)
+	result := &Invitation{}
+	err := row.Scan(&result.ID, &result.InviteeID, &result.InviteeEmail, &result.InviterID, &result.WorkspaceID, &result.Role, &result.IsValid, &result.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("invitation not found")
+			return nil, domain_errors.NewNotFoundError("Invitation", id)
 		}
-		return nil, fmt.Errorf("failed to get invitation: %w", err)
+		return nil, domain_errors.NewDatabaseError("FAILED GETTING INVITATION", err)
 	}
 
-	return invitation, nil
+	return result, nil
 }
-func (r *PostgresInvitationRepository) ListInvitationToWorkspace(workspace_id string) ([]*Invitation, error) {
-	query := `
-		SELECT user_id, organization_id, token, is_valid
-		FROM invitation
-		WHERE organization_id = $1
-	`
 
-	rows, err := r.db.Query(query, workspace_id)
+func (r *PostgresInvitationRepository) DeleteInvitation(id string) domain_errors.DomainError {
+	query := `DELETE FROM invitation WHERE id = $1`
+
+	result, err := r.db.Exec(query, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list memberships: %w", err)
-	}
-	defer rows.Close()
-
-	var invitations []*Invitation
-	for rows.Next() {
-		invitation := &Invitation{}
-		err := rows.Scan(&invitation.UserID, &invitation.WorkspaceID, &invitation.Token, &invitation.IsValid)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				return nil, fmt.Errorf("invitation not found")
-			}
-			return nil, fmt.Errorf("failed to get invitation: %w", err)
-		}
-		invitations = append(invitations, invitation)
-	}
-	return invitations, nil
-}
-func (r *PostgresInvitationRepository) Delete(token string) error {
-	query := `DELETE FROM invitation WHERE token = $1`
-
-	result, err := r.db.Exec(query, token)
-	if err != nil {
-		return fmt.Errorf("failed to delete invitation: %w", err)
+		return domain_errors.NewDatabaseError("FAILED DELETING INVITATION", err)
 	}
 
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return domain_errors.NewDatabaseError("FAILED GETTING ROWS", err)
 	}
 
 	if rows == 0 {
-		return fmt.Errorf("invitation not found")
+		return domain_errors.NewNotFoundError("Invitation", id)
 	}
 
 	return nil
+}
+
+func (r *PostgresInvitationRepository) ListInvitationToWorkspace(workspace_id string) ([]*Invitation, domain_errors.DomainError) {
+	query := `
+		SELECT id, invitee_id, invitee_email, inviter_id, workspace_id, role, is_valid, created_at
+		FROM invitation
+		WHERE workspace_id = $1
+	`
+
+	rows, err := r.db.Query(query, workspace_id)
+	if err != nil {
+		return nil, domain_errors.NewDatabaseError("FAILED GETTING INVITATIONS", err)
+	}
+	defer rows.Close()
+
+	var results []*Invitation
+	for rows.Next() {
+		invitation := &Invitation{}
+		err := rows.Scan(&invitation.ID, &invitation.InviteeID, &invitation.InviteeEmail, &invitation.InviterID, &invitation.WorkspaceID, &invitation.Role, &invitation.IsValid, &invitation.CreatedAt)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil, domain_errors.NewNotFoundError("Invitations for Workspace", workspace_id)
+			}
+			return nil, domain_errors.NewDatabaseError("FAILED GETTING INVITATIONS", err)
+		}
+		results = append(results, invitation)
+	}
+	return results, nil
 }
