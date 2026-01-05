@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/ishola-faazele/taskflow/internal/project"
 	shared_db "github.com/ishola-faazele/taskflow/internal/shared/db"
 	"github.com/ishola-faazele/taskflow/internal/user"
 	"github.com/ishola-faazele/taskflow/internal/workspace"
@@ -41,7 +42,10 @@ func main() {
 	apiRouter.Route("/workspace", func(r chi.Router) {
 		workspace.RegisterRoutes(r, db.DB)
 	})
-	
+	apiRouter.Route("/project", func(r chi.Router) {
+		project.RegisterRoutes(r, db.DB)
+	})
+
 	r.Mount("/api", apiRouter)
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		_, err := w.Write([]byte("Hello World!"))

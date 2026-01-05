@@ -34,7 +34,7 @@ func NewMigrationManager(db *sql.DB) *MigrationManager {
 	// Register all tables
 	mgr.registerWorkspaceTables()
 	mgr.registerUserTables()
-
+	mgr.registerProjectTables()
 	return mgr
 }
 
@@ -122,6 +122,7 @@ func (m *MigrationManager) registerWorkspaceTables() {
 		},
 		Dependencies: []string{"workspace", "auth"},
 	})
+
 }
 
 // registerUserTables registers user-related tables
@@ -157,6 +158,36 @@ func (m *MigrationManager) registerUserTables() {
 		`,
 		Indices:      []string{},
 		Dependencies: []string{"auth"},
+	})
+}
+func (m *MigrationManager) registerProjectTables() {
+	// Project table
+	m.RegisterTable(TableDefinition{
+		Name: "project",
+		CreateSQL: `
+			CREATE TABLE IF NOT EXISTS project (
+				id VARCHAR(255) PRIMARY KEY,
+				name VARCHAR(255) NOT NULL,
+				description TEXT,
+				workspace_id VARCHAR(255) NOT NULL,
+				creator VARCHAR(255) NOT NULL,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				CONSTRAINT fk_project_workspace
+					FOREIGN KEY (workspace_id)
+					REFERENCES workspace(id)
+					ON DELETE CASCADE,
+				CONSTRAINT fk_project_creator
+					FOREIGN KEY (creator)
+					REFERENCES auth(id)
+					ON DELETE SET NULL
+			)
+		`,
+		Indices: []string{
+			`CREATE INDEX IF NOT EXISTS idx_project_workspace_id ON project(workspace_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_project_creator ON project(creator)`,
+			`CREATE INDEX IF NOT EXISTS idx_project_name ON project(name)`,
+		},
+		Dependencies: []string{"workspace", "auth"},
 	})
 }
 
