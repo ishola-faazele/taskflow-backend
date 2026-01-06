@@ -106,12 +106,44 @@ func (r *PostgresAuthRepository) GetByEmail(email string) (*Auth, domain_errors.
 	err := row.Scan(&auth.ID, &auth.Email, &auth.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil // Return nil, nil when user doesn't exist (not an error)
+			return nil, domain_errors.NewNotFoundError("auth", email)
 		}
 		return nil, domain_errors.NewDatabaseError("auth query", err)
 	}
 
 	return auth, nil
+}
+
+func (r *PostgresAuthRepository) IsTokenValid(token_hash string) (bool, domain_errors.DomainError) {
+	query := `
+		SELECT COUNT(1)
+		FROM invalid_token
+		WHERE token_hash = $1
+	`
+	row := r.db.QueryRow(query, token_hash)
+	var count int
+	err := row.Scan(&count)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return true, nil
+		}
+		return false, domain_errors.NewDatabaseError("token validation query", err)
+	}
+	return count == 0, nil
+}
+
+func (r *PostgresAuthRepository) InvalidateToken(token *InvalidToken) domain_errors.DomainError {
+	query := `
+		INSERT INTO invalid_token (token_hash,user_id, invalidated_at, expires_at)
+		VALUES ($1, $2, $3, $4)
+	`
+
+	_, err := r.db.Exec(query, token.TokenHash, token.UserID, token.InvalidatedAt, token.ExpiresAt)
+	if err != nil {
+		return domain_errors.NewDatabaseError("token invalidation", err)
+	}
+
+	return nil
 }
 
 // UserProfile Repository Implementation
@@ -137,7 +169,7 @@ func (r *PostgresUserProfileRepository) GetProfile(id string) (*UserProfile, dom
 	return profile, nil
 }
 
-func (r *PostgresUserProfileRepository) UpdateProfile(profile *UserProfile) (*UserProfile, domain_errors.DomainError) {
+func (r *PostgresUserProfileRepository) UpdateProfile(userID, name string) (*UserProfile, domain_errors.DomainError) {
 	query := `
 		UPDATE user_profile
 		SET name = $2
@@ -145,16 +177,37 @@ func (r *PostgresUserProfileRepository) UpdateProfile(profile *UserProfile) (*Us
 		RETURNING id, name
 	`
 
-	row := r.db.QueryRow(query, profile.ID, profile.Name)
+	row := r.db.QueryRow(query, userID, name)
 
 	result := &UserProfile{}
 	err := row.Scan(&result.ID, &result.Name)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain_errors.NewNotFoundError("user profile", profile.ID)
+			return nil, domain_errors.NewNotFoundError("user profile", userID)
 		}
 		return nil, domain_errors.NewDatabaseError("profile update", err)
 	}
 
 	return result, nil
+}
+func (r *PostgresUserProfileRepository) GetPublicProfile(id string) (*PublicProfile, domain_errors.DomainError) {
+	query := `
+		SELECT up.id, up.name, a.email
+		FROM user_profile up
+		JOIN auth a ON up.id = a.id
+		WHERE up.id = $1
+	`
+
+	row := r.db.QueryRow(query, id)
+
+	publicProfile := &PublicProfile{}
+	err := row.Scan(&publicProfile.ID, &publicProfile.Name, &publicProfile.Email)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain_errors.NewNotFoundError("public profile", id)
+		}
+		return nil, domain_errors.NewDatabaseError("public profile query", err)
+	}
+
+	return publicProfile, nil
 }

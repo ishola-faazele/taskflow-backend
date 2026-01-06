@@ -159,6 +159,21 @@ func (m *MigrationManager) registerUserTables() {
 		Indices:      []string{},
 		Dependencies: []string{"auth"},
 	})
+	m.RegisterTable(TableDefinition{
+		Name: "invalid_token",
+		CreateSQL: `
+			CREATE TABLE IF NOT EXISTS invalid_token (
+				token_hash VARCHAR(64) NOT NULL PRIMARY KEY,
+				user_id VARCHAR(255) NOT NULL,
+				invalidated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				expires_at TIMESTAMP NOT NULL
+			)
+		`,
+		Indices: []string{
+			"CREATE INDEX IF NOT EXISTS idx_invalid_token_expires ON invalid_token(expires_at)",
+		},
+		Dependencies: []string{},
+	})
 }
 func (m *MigrationManager) registerProjectTables() {
 	// Project table

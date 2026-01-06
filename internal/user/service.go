@@ -54,9 +54,8 @@ func (us *UserService) GetMagicLink(email string) domain_errors.DomainError {
 			CreatedAt: time.Now().UTC(),
 		}
 		// profile is creatd as well
-		_, err = us.authRepo.Create(new_user)
-		if err != nil {
-			return nil
+		if _, err = us.authRepo.Create(new_user); err != nil {
+			return err
 		}
 	}
 
@@ -66,24 +65,53 @@ func (us *UserService) GetMagicLink(email string) domain_errors.DomainError {
 		return domain_errors.NewInternalError("FAILED TO GENERATE TOKEN", token_err)
 	}
 	// send email with magic link
-	email_err := us.emailService.SendMagicLink(email, authToken, "/api/user/verify?token=")
-	if email_err != nil {
-		return domain_errors.NewInternalError("FAILED TO SEND MAGIC LINK EMAIL", email_err)
+	if err := us.emailService.SendMagicLink(email, authToken, "/api/user/verify?token="); err != nil {
+		return domain_errors.NewInternalError("failed to send magic link email", err)
 	}
 	return nil
 }
 
 func (us *UserService) VerifyToken(token string) (string, string, domain_errors.DomainError) {
 	// check if token is signed and is valid purpose(login)
-	claims, err := us.jwtUtil.ParseUserToken(token)
-	if err != nil {
-		return "", "", domain_errors.NewInternalError("ERROR PARSING TOKEN", err)
+	claims, parseErr := us.jwtUtil.ParseUserToken(token)
+	if parseErr != nil {
+		return "", "", domain_errors.NewInternalError("ERROR PARSING TOKEN", parseErr)
 	}
 	if claims.Purpose != jwt.PurposeAuth {
 		return "", "", domain_errors.NewUnauthorizedError("INVALID TOKEN PURPOSE")
 	}
 
 	// issue new tokens for access and refresh
+	access, refresh, tokenErr := us.jwtUtil.GenerateTokenPair(claims.UserID, claims.Email)
+	if tokenErr != nil {
+		return "", "", domain_errors.NewInternalError("FAILED TO GENERATE ACCESS AND REFRESH TOKENS", tokenErr)
+	}
+	return access, refresh, nil
+}
+
+func (us *UserService) RefreshToken(refreshToken string) (string, string, domain_errors.DomainError) {
+	// validate refresh token
+	claims, parseErr := us.jwtUtil.ParseUserToken(refreshToken)
+	if parseErr != nil {
+		return "", "", domain_errors.NewInternalError("ERROR PARSING REFRESH TOKEN", parseErr)
+	}
+	if claims.Purpose != jwt.PurposeRefresh {
+		return "", "", domain_errors.NewUnauthorizedError("INVALID REFRESH TOKEN PURPOSE")
+	}
+	// check if token is valid
+	token_hash := utils.HashToken(refreshToken)
+	if valid, err := us.authRepo.IsTokenValid(token_hash); !valid || err != nil {
+		return "", "", domain_errors.NewUnauthorizedError("TOKEN IS INVALID OR EXPIRED")
+	}
+	invalidToken := &InvalidToken{
+		TokenHash:     token_hash,
+		UserID:        claims.UserID,
+		ExpiresAt:     claims.ExpiresAt.Time,
+		InvalidatedAt: time.Now().UTC(),
+	}
+	if err := us.authRepo.InvalidateToken(invalidToken); err != nil {
+		return "", "", domain_errors.NewInternalError("ERROR INVALIDATING REFRESH TOKEN", err)
+	}
 	access, refresh, token_err := us.jwtUtil.GenerateTokenPair(claims.UserID, claims.Email)
 	if token_err != nil {
 		return "", "", domain_errors.NewInternalError("FAILED TO GENERATE ACCESS AND REFRESH TOKENS", token_err)
@@ -92,9 +120,6 @@ func (us *UserService) VerifyToken(token string) (string, string, domain_errors.
 }
 
 func (us *UserService) GetByID(id string) (*Auth, domain_errors.DomainError) {
-	if err := uuid.Validate(id); err != nil {
-		return nil, domain_errors.NewValidationErrorWithValue("id", id, "ID IS NOT A VALID UUID")
-	}
 	return us.authRepo.GetByID(id)
 }
 
@@ -104,15 +129,16 @@ func (us *UserService) GetByEmail(email string) (*Auth, domain_errors.DomainErro
 }
 
 func (us *UserService) GetProfile(id string) (*UserProfile, domain_errors.DomainError) {
-	if err := uuid.Validate(id); err != nil {
-		return nil, domain_errors.NewValidationErrorWithValue("id", id, "ID IS NOT A VALID UUID")
-	}
 	return us.profileRepo.GetProfile(id)
 }
 
-func (us UserService) UpdateProfile(profile *UserProfile, requesterID string) (*UserProfile, domain_errors.DomainError) {
-	if profile.ID != requesterID {
-		return nil, domain_errors.NewUnauthorizedError("REQUESTER IS NOT THE OWNER OF PROFILE")
+func (us UserService) UpdateProfile(userID, name string) (*UserProfile, domain_errors.DomainError) {
+	return us.profileRepo.UpdateProfile(userID, name)
+}
+
+func (us UserService) GetPublicProfile(id string) (*PublicProfile, domain_errors.DomainError) {
+	if err := uuid.Validate(id); err != nil {
+		return nil, domain_errors.NewValidationErrorWithValue("id", id, "ID IS NOT A VALID UUID")
 	}
-	return us.profileRepo.UpdateProfile(profile)
+	return us.profileRepo.GetPublicProfile(id)
 }

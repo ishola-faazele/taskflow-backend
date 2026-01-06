@@ -31,7 +31,7 @@ func (r *PostgresProjectRepository) GetByID(id string) (*Project, domain_errors.
 	var project Project
 	err := row.Scan(&project.ID, &project.Name, &project.Description, &project.WorkspaceID, &project.Creator, &project.CreatedAt)
 	if err != nil {
-		return nil, domain_errors.NewDatabaseError("project retrieval", err)
+		return nil, domain_errors.NewNotFoundError("Project", id)
 	}
 	return &project, nil
 }
@@ -42,7 +42,7 @@ func (r *PostgresProjectRepository) Update(input *UpdateProjectInput, id string)
 	var updatedProject Project
 	err := row.Scan(&updatedProject.ID, &updatedProject.Name, &updatedProject.Description, &updatedProject.WorkspaceID, &updatedProject.Creator, &updatedProject.CreatedAt)
 	if err != nil {
-		return nil, domain_errors.NewDatabaseError("project update", err)
+		return nil, domain_errors.NewNotFoundError("Project", id)
 	}
 	return &updatedProject, nil
 }
@@ -58,7 +58,7 @@ func (r *PostgresProjectRepository) Delete(id string) domain_errors.DomainError 
 		return domain_errors.NewDatabaseError("project deletion", err)
 	}
 	if rowsAffected == 0 {
-		return domain_errors.NewDatabaseError("project deletion", sql.ErrNoRows)
+		return domain_errors.NewNotFoundError("Project", id)
 	}
 	return nil
 }

@@ -24,12 +24,13 @@ func NewAPIResponder() *APIResponder {
 
 // ErrorResponsePayload represents a detailed error response
 type ErrorResponsePayload struct {
-	Success   bool                   `json:"success"`
-	Error     string                 `json:"error"`
-	Message   string                 `json:"message"`
-	Details   map[string]interface{} `json:"details,omitempty"`
-	Timestamp string                 `json:"timestamp"`
-	Path      string                 `json:"path,omitempty"`
+	Success    bool                   `json:"success"`
+	Cause      string                 `json:"error"`
+	StatusCode string                 `json:"status_code,omitempty"`
+	Message    string                 `json:"message"`
+	Details    map[string]interface{} `json:"details,omitempty"`
+	Timestamp  string                 `json:"timestamp"`
+	Path       string                 `json:"path,omitempty"`
 }
 
 // SuccessResponsePayload represents a successful API response
@@ -63,17 +64,17 @@ func (a *APIResponder) Error(w http.ResponseWriter, r *http.Request, statusCode 
 	if domainErr, ok := domain_errors.GetDomainError(err); ok {
 		// Override status code with the one from domain error
 		statusCode = int(domainErr.Code())
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(statusCode)
-
 		errorResponse := ErrorResponsePayload{
-			Success:   false,
-			Error:     http.StatusText(statusCode),
-			Message:   domainErr.Message(),
-			Details:   domainErr.Details(),
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
-			Path:      r.URL.Path,
+			Success:    false,
+			StatusCode: http.StatusText(int(domainErr.Code())),
+			Cause:      domainErr.Unwrap().Error(),
+			Message:    domainErr.Message(),
+			Details:    domainErr.Details(),
+			Timestamp:  time.Now().UTC().Format(time.RFC3339),
+			Path:       r.URL.Path,
 		}
 
 		if encodeErr := json.NewEncoder(w).Encode(errorResponse); encodeErr != nil {
@@ -91,29 +92,26 @@ func (a *APIResponder) Error(w http.ResponseWriter, r *http.Request, statusCode 
 	w.WriteHeader(statusCode)
 
 	errorResponse := ErrorResponsePayload{
-		Success:   false,
-		Error:     http.StatusText(statusCode),
-		Message:   message,
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		Path:      r.URL.Path,
+		Success:    false,
+		StatusCode: http.StatusText(statusCode),
+		Message:    message,
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		Path:       r.URL.Path,
 	}
 
 	// Add error details if available
 	if err != nil {
-		errorResponse.Details = map[string]interface{}{
-			"error": err.Error(),
-		}
+		errorResponse.Cause = err.Error()
 	}
 
 	if encodeErr := json.NewEncoder(w).Encode(errorResponse); encodeErr != nil {
 		a.logger.Error(fmt.Sprintf("Failed to encode error response: %v (original error: %v)", encodeErr, err))
 	}
-	
+
 	// Log non-domain errors
 	a.logger.Error(fmt.Sprintf("%s %s - Status: %d, Message: %s, Error: %v",
 		r.Method, r.URL.Path, statusCode, message, err))
 }
-
 
 // Success sends a success response with a custom message
 func (a *APIResponder) Success(w http.ResponseWriter, r *http.Request, statusCode int, message string, payload interface{}) {

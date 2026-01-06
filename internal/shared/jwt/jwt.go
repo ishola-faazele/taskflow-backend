@@ -88,10 +88,10 @@ type InvitationClaims struct {
 // DefaultTokenConfig returns sensible defaults for token durations
 func DefaultTokenConfig() TokenConfig {
 	return TokenConfig{
-		AccessTokenDuration:     15000 * time.Minute, // Short-lived for security
-		AuthTokenDuration:       15 * time.Minute,    // Medium-lived for authentication flows
-		RefreshTokenDuration:    7 * 24 * time.Hour,  // Long-lived (7 days)
-		InvitationTokenDuration: 24 * time.Hour,      // Short-lived for invitation links
+		AccessTokenDuration:     15 * 4 * 24 * 365 * time.Minute, // Short-lived for security
+		AuthTokenDuration:       15 * time.Minute,                // Medium-lived for authentication flows
+		RefreshTokenDuration:    7 * 24 * time.Hour,              // Long-lived (7 days)
+		InvitationTokenDuration: 24 * time.Hour,                  // Short-lived for invitation links
 	}
 }
 

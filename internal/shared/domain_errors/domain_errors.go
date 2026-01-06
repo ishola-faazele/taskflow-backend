@@ -10,12 +10,12 @@ import (
 type ErrorCode int
 
 const (
-	ErrCodeNotFound         ErrorCode = http.StatusNotFound          // 404
-	ErrCodeValidation       ErrorCode = http.StatusBadRequest        // 400
+	ErrCodeNotFound         ErrorCode = http.StatusNotFound            // 404
+	ErrCodeValidation       ErrorCode = http.StatusBadRequest          // 400
 	ErrCodeDatabase         ErrorCode = http.StatusInternalServerError // 500
-	ErrCodeConflict         ErrorCode = http.StatusConflict          // 409
-	ErrCodeUnauthorized     ErrorCode = http.StatusUnauthorized      // 401
-	ErrCodeForbidden        ErrorCode = http.StatusForbidden         // 403
+	ErrCodeConflict         ErrorCode = http.StatusConflict            // 409
+	ErrCodeUnauthorized     ErrorCode = http.StatusUnauthorized        // 401
+	ErrCodeForbidden        ErrorCode = http.StatusForbidden           // 403
 	ErrCodeInvalidOperation ErrorCode = http.StatusUnprocessableEntity // 422
 	ErrCodeInternal         ErrorCode = http.StatusInternalServerError // 500
 )
