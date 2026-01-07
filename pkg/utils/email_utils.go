@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/smtp"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -22,12 +23,23 @@ type EmailConfig struct {
 	SenderEmail string
 	SenderName  string
 	AppPassword string // Gmail app password
-	FrontendURL string // Base URL of your frontend
+	FrontendURL string // Base URL of frontend
 }
 
 // EmailService handles email sending
 type EmailService struct {
 	config EmailConfig
+}
+
+func DefaultEmailConfig() EmailConfig {
+	return EmailConfig{
+		SMTPHost:    os.Getenv("SMTP_HOST"),
+		SMTPPort:    os.Getenv("SMTP_PORT"),
+		SenderEmail: os.Getenv("SMTP_USER"),
+		SenderName:  os.Getenv("STMP_SENDER_NAME"),
+		AppPassword: os.Getenv("SMTP_PASS"),
+		FrontendURL: os.Getenv("FRONTEND_URL"),
+	}
 }
 
 // NewEmailService creates a new email service
@@ -227,7 +239,7 @@ func (e *EmailService) sendEmail(to, subject, htmlBody string) error {
 	addr := fmt.Sprintf("%s:%s", e.config.SMTPHost, e.config.SMTPPort)
 	err := smtp.SendMail(addr, auth, e.config.SenderEmail, []string{to}, []byte(msg))
 	if err != nil {
-		return fmt.Errorf("failed to send email: %w", err)
+		return fmt.Errorf("FAILED_TO_SEND_EMAIL: %w", err)
 	}
 
 	return nil
@@ -267,7 +279,7 @@ func (e *EmailService) SendPlainTextEmail(toEmail, subject, body string) error {
 	addr := fmt.Sprintf("%s:%s", e.config.SMTPHost, e.config.SMTPPort)
 	err := smtp.SendMail(addr, auth, e.config.SenderEmail, []string{toEmail}, []byte(msg))
 	if err != nil {
-		return fmt.Errorf("failed to send email: %w", err)
+		return fmt.Errorf("FAILED_TO_SEND_EMAIL: %w", err)
 	}
 
 	return nil

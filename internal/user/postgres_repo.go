@@ -13,7 +13,7 @@ type PostgresAuthRepository struct {
 
 // PostgresUserProfileRepository handles user profile data persistence
 type PostgresUserProfileRepository struct {
-	db *sql.DB
+	db *sql.DB 
 }
 
 // NewPostgresAuthRepository creates a new auth repository
@@ -32,7 +32,7 @@ func (r *PostgresAuthRepository) Create(auth *Auth) (*Auth, domain_errors.Domain
 	// Start a transaction to ensure both auth and profile are created atomically
 	tx, err := r.db.Begin()
 	if err != nil {
-		return nil, domain_errors.NewDatabaseError("start transaction", err)
+		return nil, domain_errors.NewDatabaseError("START_OF_AUTH_CREATION_TRANSACTION", err)
 	}
 	defer func() {
 		_ = tx.Rollback()
@@ -50,7 +50,7 @@ func (r *PostgresAuthRepository) Create(auth *Auth) (*Auth, domain_errors.Domain
 	result := &Auth{}
 	err = row.Scan(&result.ID, &result.Email, &result.CreatedAt)
 	if err != nil {
-		return nil, domain_errors.NewDatabaseError("auth creation", err)
+		return nil, domain_errors.NewDatabaseError("AUTH_CREATION", err)
 	}
 
 	// Create corresponding profile with the same ID
@@ -61,12 +61,12 @@ func (r *PostgresAuthRepository) Create(auth *Auth) (*Auth, domain_errors.Domain
 
 	_, err = tx.Exec(profileQuery, result.ID, "")
 	if err != nil {
-		return nil, domain_errors.NewDatabaseError("profile creation", err)
+		return nil, domain_errors.NewDatabaseError("PROFILE_CREATION", err)
 	}
 
 	// Commit transaction
 	if err = tx.Commit(); err != nil {
-		return nil, domain_errors.NewDatabaseError("commit transaction", err)
+		return nil, domain_errors.NewDatabaseError("COMMIT_OF_AUTH_CREATION_TRANSACTION", err)
 	}
 
 	return result, nil
@@ -85,9 +85,9 @@ func (r *PostgresAuthRepository) GetByID(id string) (*Auth, domain_errors.Domain
 	err := row.Scan(&auth.ID, &auth.Email, &auth.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain_errors.NewNotFoundError("auth", id)
+			return nil, domain_errors.NewNotFoundError("AUTH", id)
 		}
-		return nil, domain_errors.NewDatabaseError("auth query", err)
+		return nil, domain_errors.NewDatabaseError("AUTH_QUERY", err)
 	}
 
 	return auth, nil
@@ -106,9 +106,9 @@ func (r *PostgresAuthRepository) GetByEmail(email string) (*Auth, domain_errors.
 	err := row.Scan(&auth.ID, &auth.Email, &auth.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain_errors.NewNotFoundError("auth", email)
+			return nil, nil
 		}
-		return nil, domain_errors.NewDatabaseError("auth query", err)
+		return nil, domain_errors.NewDatabaseError("AUTH_QUERY", err)
 	}
 
 	return auth, nil
@@ -127,7 +127,7 @@ func (r *PostgresAuthRepository) IsTokenValid(token_hash string) (bool, domain_e
 		if err == sql.ErrNoRows {
 			return true, nil
 		}
-		return false, domain_errors.NewDatabaseError("token validation query", err)
+		return false, domain_errors.NewDatabaseError("TOKEN_VALIDATION_QUERY", err)
 	}
 	return count == 0, nil
 }
@@ -140,7 +140,7 @@ func (r *PostgresAuthRepository) InvalidateToken(token *InvalidToken) domain_err
 
 	_, err := r.db.Exec(query, token.TokenHash, token.UserID, token.InvalidatedAt, token.ExpiresAt)
 	if err != nil {
-		return domain_errors.NewDatabaseError("token invalidation", err)
+		return domain_errors.NewDatabaseError("TOKEN_INVALIDATION", err)
 	}
 
 	return nil
@@ -161,9 +161,9 @@ func (r *PostgresUserProfileRepository) GetProfile(id string) (*UserProfile, dom
 	err := row.Scan(&profile.ID, &profile.Name)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain_errors.NewNotFoundError("user profile", id)
+			return nil, domain_errors.NewNotFoundError("USER_PROFILE", id)
 		}
-		return nil, domain_errors.NewDatabaseError("profile query", err)
+		return nil, domain_errors.NewDatabaseError("PROFILE_QUERY", err)
 	}
 
 	return profile, nil
@@ -183,9 +183,9 @@ func (r *PostgresUserProfileRepository) UpdateProfile(userID, name string) (*Use
 	err := row.Scan(&result.ID, &result.Name)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain_errors.NewNotFoundError("user profile", userID)
+			return nil, domain_errors.NewNotFoundError("USER_PROFILE", userID)
 		}
-		return nil, domain_errors.NewDatabaseError("profile update", err)
+		return nil, domain_errors.NewDatabaseError("PROFILE_UPDATE", err)
 	}
 
 	return result, nil
@@ -204,9 +204,9 @@ func (r *PostgresUserProfileRepository) GetPublicProfile(id string) (*PublicProf
 	err := row.Scan(&publicProfile.ID, &publicProfile.Name, &publicProfile.Email)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain_errors.NewNotFoundError("public profile", id)
+			return nil, domain_errors.NewNotFoundError("PUBLIC_PROFILE", id)
 		}
-		return nil, domain_errors.NewDatabaseError("public profile query", err)
+		return nil, domain_errors.NewDatabaseError("PUBLIC_PROFILE_QUERY", err)
 	}
 
 	return publicProfile, nil

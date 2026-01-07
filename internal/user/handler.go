@@ -34,30 +34,40 @@ type MagicLinkRequestDTO struct {
 type UserProfileDTO struct {
 	Name string `json:"name"`
 }
+type VerifyTokenResponse struct {
+	AccessToken string `json:"access_token"`
+}
 
+// Creates a magic link which the user has to verify to log in
 func (h *UserHandler) RequestMagicLink(w http.ResponseWriter, r *http.Request) {
 	var req MagicLinkRequestDTO
+	// decode request body
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.responder.Error(w, r, http.StatusBadRequest, "INVALID REQUEST BODY", err)
+		h.responder.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST_BODY", err)
 		return
 	}
+	// send magic link
 	if err := h.service.GetMagicLink(req.Email); err != nil {
-		h.responder.Error(w, r, http.StatusInternalServerError, "FAILED TO SEND MAGIC LINK", err)
+		h.responder.Error(w, r, http.StatusInternalServerError, "FAILED_TO_SEND_MAGIC_LINK", err)
 		return
 	}
 
 	h.responder.NoContent(w)
 }
 
+// verifies token embedded in the magic link
 func (h UserHandler) VerifyToken(w http.ResponseWriter, r *http.Request) {
+	// get token from query param
 	token := r.URL.Query().Get("token")
-	access, refresh, err := h.service.VerifyToken(token)
-	if err != nil {
-		h.responder.Error(w, r, http.StatusBadRequest, "Error Verifying Token", err)
+	// verify token and return access and refresh tokens
+	access, refresh, verifyErr := h.service.VerifyToken(token)
+	if verifyErr != nil {
+		h.responder.Error(w, r, http.StatusBadRequest, "ERROR_VERIFYING_TOKEN", verifyErr)
 		return
 	}
-	data := map[string]string{
-		"access_token": access,
+	// encode access token
+	data := VerifyTokenResponse{
+		AccessToken: access,
 	}
 	// embed refresh token in http cookie
 	http.SetCookie(w, &http.Cookie{
@@ -65,22 +75,26 @@ func (h UserHandler) VerifyToken(w http.ResponseWriter, r *http.Request) {
 		Value:    refresh,
 		HttpOnly: true,
 	})
-	h.responder.Success(w, r, http.StatusOK, "Token Successfully Verified", data)
+	h.responder.Success(w, r, http.StatusOK, "TOKEN_SUCCESSFULLY_VERIFIED", data)
 }
 
+// Returns new access and refresh tokens while invalidating the old refresh token
 func (h UserHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	// get refresh token from cookie
 	cookie, err := r.Cookie("refresh_token")
 	if err != nil {
-		h.responder.Error(w, r, http.StatusUnauthorized, "Refresh Token Missing", err)
+		h.responder.Error(w, r, http.StatusUnauthorized, "REFRESH_TOKEN_NOT_FOUND_IN_COOKIE", err)
 		return
 	}
+	// verify refresh token and return new access and refresh tokens
 	access, refresh, token_err := h.service.RefreshToken(cookie.Value)
 	if token_err != nil {
-		h.responder.Error(w, r, http.StatusUnauthorized, "Error Refreshing Token", token_err)
+		h.responder.Error(w, r, http.StatusUnauthorized, "ERROR_REFRESHING_TOKEN", token_err)
 		return
 	}
-	data := map[string]string{
-		"access_token": access,
+	// encode access token
+	data := VerifyTokenResponse{
+		AccessToken: access,
 	}
 	// embed new refresh token in http cookie
 	http.SetCookie(w, &http.Cookie{
@@ -88,22 +102,23 @@ func (h UserHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		Value:    refresh,
 		HttpOnly: true,
 	})
-	h.responder.Success(w, r, http.StatusOK, "Token Successfully Refreshed", data)
+	h.responder.Success(w, r, http.StatusOK, "TOKEN SUCCESSFULLY_REFRESHED", data)
 }
 
+// A route for users to get their own auth data
 func (h UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID, ok := ctx.Value(domain_middleware.UserIDKey).(string)
 	if !ok || userID == "" {
-		h.responder.Error(w, r, http.StatusUnauthorized, "Unauthorized: User ID not found in context", nil)
+		h.responder.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED: USER_ID_NOT_FOUND_IN_CONTEXT", nil)
 		return
 	}
 	user, err := h.service.GetByID(userID)
 	if err != nil {
-		h.responder.Error(w, r, http.StatusInternalServerError, "Failed to Get User", err)
+		h.responder.Error(w, r, http.StatusInternalServerError, "FAILED_TO_GET_USER", err)
 		return
 	}
-	h.responder.Success(w, r, http.StatusOK, "User Retrieved Successfully", user)
+	h.responder.Success(w, r, http.StatusOK, "USER_RETRIEVED_SUCCESSFULLY", user)
 }
 
 // func (h UserHandler) GetEmail(w http.ResponseWriter, r *http.Request) {
@@ -121,49 +136,52 @@ func (h UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // 	h.responder.Success(w, r, http.StatusOK, "User Retrieved Successfully", user.Email)
 // }
 
+// A route for users to get their own profile data.
 func (h UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID, ok := ctx.Value(domain_middleware.UserIDKey).(string)
 	if !ok || userID == "" {
-		h.responder.Error(w, r, http.StatusUnauthorized, "Unauthorized: User ID not found in context", nil)
+		h.responder.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED: USER_ID_NOT_FOUND_IN_CONTEXT", nil)
 		return
 	}
 	profile, err := h.service.GetProfile(userID)
 	if err != nil {
-		h.responder.Error(w, r, http.StatusInternalServerError, "Failed to Get Profile", err)
+		h.responder.Error(w, r, http.StatusInternalServerError, "FAILED_TO_GET_PROFILE", err)
 		return
 	}
-	h.responder.Success(w, r, http.StatusOK, "Profile Retrieved Successfully", profile)
+	h.responder.Success(w, r, http.StatusOK, "PROFILE_RETRIEVED_SUCCESSFULLY", profile)
 }
 
+// A route to update a user's profile
 func (h UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID, ok := ctx.Value(domain_middleware.UserIDKey).(string)
 	if !ok || userID == "" {
-		h.responder.Error(w, r, http.StatusUnauthorized, "Unauthorized: User ID not found in context", nil)
+		h.responder.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED: USER_ID_NOT_FOUND_IN_CONTEXT", nil)
 		return
 	}
 
 	var profile UserProfileDTO
 	if err := json.NewDecoder(r.Body).Decode(&profile); err != nil {
-		h.responder.Error(w, r, http.StatusBadRequest, "Invalid request body", err)
+		h.responder.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST_BODY", err)
 		return
 	}
 
 	updatedProfile, err := h.service.UpdateProfile(userID, profile.Name)
 	if err != nil {
-		h.responder.Error(w, r, http.StatusInternalServerError, "Failed to Update Profile", err)
+		h.responder.Error(w, r, http.StatusInternalServerError, "FAILED_TO_UPDATE_PROFILE", err)
 		return
 	}
-	h.responder.Success(w, r, http.StatusOK, "Profile Updated Successfully", updatedProfile)
+	h.responder.Success(w, r, http.StatusOK, "PROFILE_UPDATED_SUCCESSFULLY", updatedProfile)
 }
 
+// A route to get a user's public profile
 func (h UserHandler) GetPublicProfile(w http.ResponseWriter, r *http.Request) {
 	userID := r.PathValue("id")
 	publicProfile, err := h.service.GetPublicProfile(userID)
 	if err != nil {
-		h.responder.Error(w, r, http.StatusInternalServerError, "Failed to Get Public Profile", err)
+		h.responder.Error(w, r, http.StatusInternalServerError, "FAILED_TO_GET_PUBLIC_PROFILE", err)
 		return
 	}
-	h.responder.Success(w, r, http.StatusOK, "Public Profile Retrieved Successfully", publicProfile)
+	h.responder.Success(w, r, http.StatusOK, "PUBLIC_PROFILE_RETRIEVED_SUCCESSFULLY", publicProfile)
 }

@@ -1,11 +1,23 @@
 package user
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Auth struct {
 	ID        string    `json:"id"`
 	Email     string    `json:"email"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+func CreateNewAuth(email string) *Auth {
+	return &Auth{
+		ID:        uuid.NewString(),
+		Email:     email,
+		CreatedAt: time.Now().UTC(),
+	}
 }
 
 type UserProfile struct {
@@ -14,7 +26,7 @@ type UserProfile struct {
 }
 
 type PublicProfile struct {
-	ID    string `json:"id"`
+	ID    string `json:"id"` 
 	Name  string `json:"name"`
 	Email string `json:"email"`
 }
