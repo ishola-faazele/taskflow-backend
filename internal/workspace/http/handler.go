@@ -6,6 +6,9 @@ import (
 	"net/http"
 
 	domain_middleware "github.com/ishola-faazele/taskflow/internal/middleware"
+	. "github.com/ishola-faazele/taskflow/internal/workspace/db"
+	. "github.com/ishola-faazele/taskflow/internal/workspace/entity"
+	. "github.com/ishola-faazele/taskflow/internal/workspace/service"
 	"github.com/ishola-faazele/taskflow/pkg/utils"
 )
 

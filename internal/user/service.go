@@ -142,3 +142,5 @@ func (us UserService) GetPublicProfile(id string) (*PublicProfile, domain_errors
 	}
 	return us.profileRepo.GetPublicProfile(id)
 }
+
+

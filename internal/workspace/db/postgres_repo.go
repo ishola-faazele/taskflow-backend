@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ishola-faazele/taskflow/internal/shared/domain_errors"
+	. "github.com/ishola-faazele/taskflow/internal/workspace/entity"
 )
 
 type PostgresWorkspaceRepository struct {
@@ -37,18 +38,47 @@ func NewPostgresInvitationRepository(db *sql.DB) *PostgresInvitationRepository {
 // WorkspaceRepository implementation
 
 func (r *PostgresWorkspaceRepository) Create(ws *Workspace) (*Workspace, domain_errors.DomainError) {
-	query := `
+	// Start a transaction
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, domain_errors.NewDatabaseError("workspace creation - begin transaction", err)
+	}
+	defer func() {
+		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
+			// Rollback failed, but transaction may have already been rolled back
+		}
+	}()
+
+	// Insert the workspace
+	workspaceQuery := `
 		INSERT INTO workspace (id, name, owner_id, created_at)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, name, owner_id, created_at
 	`
 
-	row := r.db.QueryRow(query, ws.ID, ws.Name, ws.OwnerID, ws.CreatedAt)
+	row := tx.QueryRow(workspaceQuery, ws.ID, ws.Name, ws.OwnerID, ws.CreatedAt)
 
 	result := &Workspace{}
-	err := row.Scan(&result.ID, &result.Name, &result.OwnerID, &result.CreatedAt)
+	err = row.Scan(&result.ID, &result.Name, &result.OwnerID, &result.CreatedAt)
 	if err != nil {
-		return nil, domain_errors.NewDatabaseError("workspace creation", err)
+		return nil, domain_errors.NewDatabaseError("workspace creation - insert workspace", err)
+	}
+
+	// Insert the owner membership
+	membershipQuery := `
+		INSERT INTO membership (user_id, workspace_id, role, created_at)
+		VALUES ($1, $2, $3, $4)
+	`
+
+	_, err = tx.Exec(membershipQuery, result.OwnerID, result.ID, RoleOwner, result.CreatedAt)
+	if err != nil {
+		return nil, domain_errors.NewDatabaseError("workspace creation - insert membership", err)
+	}
+
+	// Commit the transaction
+	err = tx.Commit()
+	if err != nil {
+		return nil, domain_errors.NewDatabaseError("workspace creation - commit transaction", err)
 	}
 
 	return result, nil
@@ -220,6 +250,22 @@ func (r *PostgresMembershipRepository) ListByWorkspace(workspaceID string) ([]*M
 	}
 
 	return memberships, nil
+}
+
+func (r *PostgresMembershipRepository) IsMember(userID, workspaceID string) (bool, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM membership
+		WHERE user_id = $1 AND workspace_id = $2
+	`
+
+	var count int
+	err := r.db.QueryRow(query, userID, workspaceID).Scan(&count)
+	if err != nil {
+		return false, domain_errors.NewDatabaseError("Check Membership", err)
+	}
+
+	return count > 0, nil
 }
 
 // InvitationRepository implementation

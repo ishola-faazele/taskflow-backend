@@ -204,6 +204,46 @@ func (m *MigrationManager) registerProjectTables() {
 		},
 		Dependencies: []string{"workspace", "auth"},
 	})
+	// Task table
+	m.RegisterTable(TableDefinition{
+		Name: "task",
+		CreateSQL: `
+			CREATE TABLE IF NOT EXISTS task (
+				id VARCHAR(255) PRIMARY KEY,
+				parent_id VARCHAR(255),
+				project_id VARCHAR(255),
+				name VARCHAR(255) NOT NULL,
+				description TEXT,
+				creator VARCHAR(255) NOT NULL,
+				status VARCHAR(50) NOT NULL,
+				priority VARCHAR(50) NOT NULL,
+				due_date TIMESTAMP,
+				created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				CONSTRAINT fk_task_parent
+					FOREIGN KEY (parent_id)
+					REFERENCES task(id)
+					ON DELETE CASCADE,
+				CONSTRAINT fk_task_project
+					FOREIGN KEY (project_id)
+					REFERENCES project(id)
+					ON DELETE CASCADE,
+				CONSTRAINT fk_task_creator
+					FOREIGN KEY (creator)
+					REFERENCES auth(id)
+					ON DELETE SET NULL
+			)
+		`,
+		Indices: []string{
+			`CREATE INDEX IF NOT EXISTS idx_task_parent_id ON task(parent_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_task_project_id ON task(project_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_task_status ON task(status)`,
+			`CREATE INDEX IF NOT EXISTS idx_task_priority ON task(priority)`,
+			`CREATE INDEX IF NOT EXISTS idx_task_due_date ON task(due_date)`,
+			`CREATE INDEX IF NOT EXISTS idx_task_creator ON task(creator)`,
+		},
+		Dependencies: []string{"project"},
+	})
 }
 
 // RegisterTable adds a new table definition to the migration manager

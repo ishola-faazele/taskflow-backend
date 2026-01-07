@@ -1,6 +1,9 @@
 package workspace
 
-import "github.com/ishola-faazele/taskflow/internal/shared/domain_errors"
+import (
+	"github.com/ishola-faazele/taskflow/internal/shared/domain_errors"
+	. "github.com/ishola-faazele/taskflow/internal/workspace/entity"
+)
 
 type WorkspaceRepository interface {
 	Create(ws *Workspace) (*Workspace, domain_errors.DomainError)
@@ -21,4 +24,5 @@ type MembershipRepository interface {
 	Add(membership *Membership) (*Membership, error)
 	Remove(userID, workspaceID string) error
 	ListByWorkspace(workspaceID string) ([]*Membership, error)
+	IsMember(userID, workspaceID string) (bool, error)
 }

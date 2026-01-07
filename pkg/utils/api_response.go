@@ -67,10 +67,14 @@ func (a *APIResponder) Error(w http.ResponseWriter, r *http.Request, statusCode 
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(statusCode)
+		cause := "UNKNOWN"
+		if domainErr.Unwrap() != nil {
+			cause = domainErr.Unwrap().Error()
+		}
 		errorResponse := ErrorResponsePayload{
 			Success:    false,
 			StatusCode: http.StatusText(int(domainErr.Code())),
-			Cause:      domainErr.Unwrap().Error(),
+			Cause:      cause,
 			Message:    domainErr.Message(),
 			Details:    domainErr.Details(),
 			Timestamp:  time.Now().UTC().Format(time.RFC3339),

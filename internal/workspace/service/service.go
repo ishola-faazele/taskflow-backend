@@ -1,19 +1,22 @@
 package workspace
 
 import (
+	"log"
 	"os"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/ishola-faazele/taskflow/internal/shared/domain_errors"
 	"github.com/ishola-faazele/taskflow/internal/shared/jwt"
+	. "github.com/ishola-faazele/taskflow/internal/workspace/entity"
+	. "github.com/ishola-faazele/taskflow/internal/workspace/repository"
 	"github.com/ishola-faazele/taskflow/pkg/utils"
 )
 
 type WorkspaceService struct {
-	workspaceRepo  WorkspaceRepository
-	membershipRepo MembershipRepository
-	invitationRepo InvitationRepository
+	WorkspaceRepo  WorkspaceRepository
+	MembershipRepo MembershipRepository
+	InvitationRepo InvitationRepository
 	jwtUtil        *jwt.JWTUtils
 	emailService   *utils.EmailService
 }
@@ -28,9 +31,9 @@ func NewWorkspaceService(workspaceRepo WorkspaceRepository, invitationRepo Invit
 		FrontendURL: "http://localhost:3000",
 	}
 	return &WorkspaceService{
-		workspaceRepo:  workspaceRepo,
-		membershipRepo: membershipRepo,
-		invitationRepo: invitationRepo,
+		WorkspaceRepo:  workspaceRepo,
+		MembershipRepo: membershipRepo,
+		InvitationRepo: invitationRepo,
 		jwtUtil:        jwt.NewJWTUtils(jwt.DefaultTokenConfig()),
 		emailService:   utils.NewEmailService(emailConfig),
 	}
@@ -42,24 +45,20 @@ func (s *WorkspaceService) CreateWorkspace(name, ownerID string) (*Workspace, do
 		return nil, domain_errors.NewValidationErrorWithValue("name", name, "EMPTY WORKSPACE NAME")
 	}
 
-	if err := uuid.Validate(ownerID); err != nil {
-		return nil, domain_errors.NewValidationErrorWithValue("owner_id", ownerID, "OWNER_ID IS NOT A VALID UUID")
-	}
-
 	workspace := &Workspace{
 		ID:        uuid.NewString(),
 		Name:      name,
 		OwnerID:   ownerID,
 		CreatedAt: time.Now().UTC(),
 	}
-	return s.workspaceRepo.Create(workspace)
+	return s.WorkspaceRepo.Create(workspace)
 }
 
 func (s *WorkspaceService) GetWorkspaceByID(id string) (*Workspace, domain_errors.DomainError) {
 	if err := uuid.Validate(id); err != nil {
 		return nil, domain_errors.NewValidationErrorWithValue("id", id, "WORKSPACE_ID IS NOT A VALID UUID")
 	}
-	return s.workspaceRepo.GetByID(id)
+	return s.WorkspaceRepo.GetByID(id)
 }
 
 func (s *WorkspaceService) UpdateWorkspace(id, name, requester string) (*Workspace, domain_errors.DomainError) {
@@ -82,7 +81,7 @@ func (s *WorkspaceService) UpdateWorkspace(id, name, requester string) (*Workspa
 	}
 	workspace.Name = name
 
-	return s.workspaceRepo.Update(workspace)
+	return s.WorkspaceRepo.Update(workspace)
 }
 
 func (s *WorkspaceService) DeleteWorkspace(id, requester string) domain_errors.DomainError {
@@ -97,14 +96,15 @@ func (s *WorkspaceService) DeleteWorkspace(id, requester string) domain_errors.D
 		return domain_errors.NewUnauthorizedError("REQUESTER IS NOT THE OWNER OF WORKSPACE")
 	}
 
-	return s.workspaceRepo.Delete(id)
+	return s.WorkspaceRepo.Delete(id)
 }
 
 func (s *WorkspaceService) ListWorkspacesByOwner(ownerID string) ([]*Workspace, domain_errors.DomainError) {
+	log.Println("USER ID: ", ownerID)
 	if err := uuid.Validate(ownerID); err != nil {
 		return nil, domain_errors.NewValidationErrorWithValue("ownerID", ownerID, "OWNER ID IS NOT A VALID UUID")
 	}
-	return s.workspaceRepo.ListByOwner(ownerID)
+	return s.WorkspaceRepo.ListByOwner(ownerID)
 
 }
 
@@ -135,7 +135,7 @@ func (s *WorkspaceService) CreateInvitation(invitee, inviter, ws, email string, 
 		CreatedAt:    time.Now().UTC(),
 	}
 	// send invitation link to email
-	inv, err := s.invitationRepo.Create(inv)
+	inv, err := s.InvitationRepo.Create(inv)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func (s *WorkspaceService) GetInvitation(id string) (*Invitation, error) {
 	if err := uuid.Validate(id); err != nil {
 		return nil, domain_errors.NewValidationErrorWithValue("invitation_id", id, "INVITATION_ID IS NOT A VALID UUID")
 	}
-	return s.invitationRepo.GetByID(id)
+	return s.InvitationRepo.GetByID(id)
 }
 
 func (s *WorkspaceService) DeleteInvitation(id, requester string) error {
@@ -172,7 +172,7 @@ func (s *WorkspaceService) DeleteInvitation(id, requester string) error {
 	if invitation.InviterID != requester {
 		return domain_errors.NewUnauthorizedError("REQUESTER IS NOT THE INVITER OF INVITATION")
 	}
-	return s.invitationRepo.DeleteInvitation(id)
+	return s.InvitationRepo.DeleteInvitation(id)
 }
 func (s *WorkspaceService) ListWorkspaceInvitations(ws_id, requester string) ([]*Invitation, domain_errors.DomainError) {
 	if err := uuid.Validate(ws_id); err != nil {
@@ -189,7 +189,7 @@ func (s *WorkspaceService) ListWorkspaceInvitations(ws_id, requester string) ([]
 	if ws.OwnerID != requester {
 		return nil, domain_errors.NewUnauthorizedError("REQUESTER IS NOT THE OWNER OF WORKSPACE")
 	}
-	return s.invitationRepo.ListInvitationToWorkspace(ws_id)
+	return s.InvitationRepo.ListInvitationToWorkspace(ws_id)
 }
 
 // MEMBERSHIP FUNCTIONS
@@ -208,7 +208,7 @@ func (s *WorkspaceService) AddMembership(token string) (*Membership, error) {
 		Role:        role,
 		CreatedAt:   time.Now().UTC(),
 	}
-	return s.membershipRepo.Add(membership)
+	return s.MembershipRepo.Add(membership)
 }
 func (s *WorkspaceService) RemoveMembership(userID, workspaceID, requester string) error {
 	// validate inputs
@@ -229,7 +229,7 @@ func (s *WorkspaceService) RemoveMembership(userID, workspaceID, requester strin
 	if ws.OwnerID != requester {
 		return domain_errors.NewUnauthorizedError("REQUESTER IS NOT THE OWNER OF WORKSPACE")
 	}
-	return s.membershipRepo.Remove(userID, workspaceID)
+	return s.MembershipRepo.Remove(userID, workspaceID)
 }
 
 func (s *WorkspaceService) ListWorkspaceMembers(workspaceID, requester string) ([]*Membership, error) {
@@ -248,5 +248,14 @@ func (s *WorkspaceService) ListWorkspaceMembers(workspaceID, requester string) (
 	if ws.OwnerID != requester {
 		return nil, domain_errors.NewUnauthorizedError("REQUESTER IS NOT THE OWNER OF WORKSPACE")
 	}
-	return s.membershipRepo.ListByWorkspace(workspaceID)
+	return s.MembershipRepo.ListByWorkspace(workspaceID)
+}
+func (s *WorkspaceService) IsMember(userID, workspaceID string) (bool, error) {
+	if err := uuid.Validate(userID); err != nil {
+		return false, domain_errors.NewValidationErrorWithValue("user_id", userID, "USER ID IS NOT A VALID UUID")
+	}
+	if err := uuid.Validate(workspaceID); err != nil {
+		return false, domain_errors.NewValidationErrorWithValue("user_id", userID, "USER ID IS NOT A VALID UUID")
+	}
+	return s.MembershipRepo.IsMember(userID, workspaceID)
 }

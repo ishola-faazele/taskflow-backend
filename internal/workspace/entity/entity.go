@@ -21,10 +21,10 @@ type Invitation struct {
 }
 
 type Membership struct {
-	UserID      string
-	WorkspaceID string
-	Role        Role
-	CreatedAt   time.Time
+	UserID      string    `json:"user_id"`
+	WorkspaceID string    `json:"workspace_id"`
+	Role        Role      `json:"role"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Role string

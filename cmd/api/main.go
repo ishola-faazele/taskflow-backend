@@ -9,7 +9,7 @@ import (
 	"github.com/ishola-faazele/taskflow/internal/project"
 	shared_db "github.com/ishola-faazele/taskflow/internal/shared/db"
 	"github.com/ishola-faazele/taskflow/internal/user"
-	"github.com/ishola-faazele/taskflow/internal/workspace"
+	workspace "github.com/ishola-faazele/taskflow/internal/workspace/http"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
@@ -42,8 +42,11 @@ func main() {
 	apiRouter.Route("/workspace", func(r chi.Router) {
 		workspace.RegisterRoutes(r, db.DB)
 	})
-	apiRouter.Route("/project", func(r chi.Router) {
-		project.RegisterRoutes(r, db.DB)
+	apiRouter.Route("/workspace/{ws_id}/project", func(r chi.Router) {
+		project.RegisterProjectRoutes(r, db.DB)
+	})
+	apiRouter.Route("/workspace/{ws_id}/task", func(r chi.Router) {
+		project.RegisterTaskRoutes(r, db.DB)
 	})
 
 	r.Mount("/api", apiRouter)
