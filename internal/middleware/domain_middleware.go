@@ -1,19 +1,19 @@
 package middleware
 
 import (
-	"github.com/ishola-faazele/taskflow/internal/shared/jwt"
+	"github.com/ishola-faazele/taskflow/internal/utils/jwt"
 	workspace "github.com/ishola-faazele/taskflow/internal/workspace/service"
-	"github.com/ishola-faazele/taskflow/pkg/utils"
+	"github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
 )
 
 type DomainMiddleware struct {
 	jwt              *jwt.JWTUtils
-	responder        *utils.APIResponder
+	responder        *domain_errors.APIResponder
 	WorkspaceService *workspace.WorkspaceService
 }
 
 func NewDomainMiddleware() *DomainMiddleware {
-	responder := utils.NewAPIResponder()
+	responder := domain_errors.NewAPIResponder()
 	return &DomainMiddleware{
 		jwt:       jwt.NewJWTUtils(jwt.DefaultTokenConfig()),
 		responder: responder,

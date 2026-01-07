@@ -7,19 +7,19 @@ import (
 
 	domain_middleware "github.com/ishola-faazele/taskflow/internal/middleware"
 
-	"github.com/ishola-faazele/taskflow/pkg/utils"
+	"github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
 )
 
 type UserHandler struct {
 	service   *UserService
-	responder *utils.APIResponder
+	responder *domain_errors.APIResponder
 }
 
 func NewUserHandler(db *sql.DB) *UserHandler {
 	postgresAuthRepo := NewPostgresAuthRepository(db)
 	postgresProfileRepo := NewPostgresUserProfileRepository(db)
 	service := NewUserService(postgresAuthRepo, postgresProfileRepo)
-	responder := utils.NewAPIResponder()
+	responder := domain_errors.NewAPIResponder()
 
 	return &UserHandler{
 		service:   service,

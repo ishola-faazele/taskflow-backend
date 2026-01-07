@@ -9,12 +9,12 @@ import (
 	. "github.com/ishola-faazele/taskflow/internal/workspace/db"
 	. "github.com/ishola-faazele/taskflow/internal/workspace/entity"
 	. "github.com/ishola-faazele/taskflow/internal/workspace/service"
-	"github.com/ishola-faazele/taskflow/pkg/utils"
+	"github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
 )
 
 type WorkspaceHandler struct {
 	service   *WorkspaceService
-	responder *utils.APIResponder
+	responder *domain_errors.APIResponder
 }
 
 func NewWorkspaceHandler(db *sql.DB) *WorkspaceHandler {
@@ -22,7 +22,7 @@ func NewWorkspaceHandler(db *sql.DB) *WorkspaceHandler {
 	invitationRepo := NewPostgresInvitationRepository(db)
 	membershipRepo := NewPostgresMembershipRepository(db)
 	service := NewWorkspaceService(workspaceRepo, invitationRepo, membershipRepo)
-	responder := utils.NewAPIResponder()
+	responder := domain_errors.NewAPIResponder()
 
 	return &WorkspaceHandler{
 		service:   service,

@@ -1,4 +1,4 @@
-package utils
+package domain_errors
 
 import (
 	"encoding/json"
@@ -6,8 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ishola-faazele/taskflow/internal/shared/domain_errors"
-	"github.com/ishola-faazele/taskflow/internal/shared/logger"
+	"github.com/ishola-faazele/taskflow/pkg/utils/logger"
 )
 
 // APIResponder handles all HTTP responses with consistent formatting
@@ -61,7 +60,7 @@ type Pagination struct {
 // Error sends a detailed error response
 func (a *APIResponder) Error(w http.ResponseWriter, r *http.Request, statusCode int, message string, err error) {
 	// Check if it's a domain error first
-	if domainErr, ok := domain_errors.GetDomainError(err); ok {
+	if domainErr, ok := GetDomainError(err); ok {
 		// Override status code with the one from domain error
 		statusCode = int(domainErr.Code())
 

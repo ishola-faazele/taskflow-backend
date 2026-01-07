@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/ishola-faazele/taskflow/internal/shared/domain_errors"
-	"github.com/ishola-faazele/taskflow/internal/shared/jwt"
+	"github.com/ishola-faazele/taskflow/internal/utils/jwt"
 	. "github.com/ishola-faazele/taskflow/internal/workspace/entity"
 	. "github.com/ishola-faazele/taskflow/internal/workspace/repository"
 	"github.com/ishola-faazele/taskflow/pkg/utils"
+	"github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
 )
 
 type WorkspaceService struct {

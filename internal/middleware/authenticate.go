@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/ishola-faazele/taskflow/internal/shared/jwt"
+	"github.com/ishola-faazele/taskflow/internal/utils/jwt"
 )
 
 type contextKey string

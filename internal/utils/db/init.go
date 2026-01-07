@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/ishola-faazele/taskflow/internal/shared/logger"
+	"github.com/ishola-faazele/taskflow/pkg/utils/logger"
 )
 
 // TableDefinition represents a database table with its schema and indices

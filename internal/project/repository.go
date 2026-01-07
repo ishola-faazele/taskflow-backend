@@ -1,6 +1,6 @@
 package project
 
-import "github.com/ishola-faazele/taskflow/internal/shared/domain_errors"
+import "github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
 
 type ProjectRepository interface {
 	Create(project *Project) (*Project, domain_errors.DomainError)

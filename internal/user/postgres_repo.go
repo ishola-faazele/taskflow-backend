@@ -3,7 +3,7 @@ package user
 import (
 	"database/sql"
 
-	"github.com/ishola-faazele/taskflow/internal/shared/domain_errors"
+	"github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
 )
 
 // PostgresAuthRepository handles auth data persistence
@@ -13,7 +13,7 @@ type PostgresAuthRepository struct {
 
 // PostgresUserProfileRepository handles user profile data persistence
 type PostgresUserProfileRepository struct {
-	db *sql.DB 
+	db *sql.DB
 }
 
 // NewPostgresAuthRepository creates a new auth repository

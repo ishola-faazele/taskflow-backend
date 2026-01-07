@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/ishola-faazele/taskflow/internal/shared/domain_errors"
 	. "github.com/ishola-faazele/taskflow/internal/workspace/entity"
+	"github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
 )
 
 type PostgresWorkspaceRepository struct {

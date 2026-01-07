@@ -1,8 +1,8 @@
 package workspace
 
 import (
-	"github.com/ishola-faazele/taskflow/internal/shared/domain_errors"
 	. "github.com/ishola-faazele/taskflow/internal/workspace/entity"
+	"github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
 )
 
 type WorkspaceRepository interface {

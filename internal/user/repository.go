@@ -1,6 +1,6 @@
 package user
 
-import "github.com/ishola-faazele/taskflow/internal/shared/domain_errors"
+import "github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
 
 type AuthRepository interface {
 	Create(auth *Auth) (*Auth, domain_errors.DomainError)

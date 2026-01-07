@@ -7,17 +7,17 @@ import (
 	"time"
 
 	domain_middleware "github.com/ishola-faazele/taskflow/internal/middleware"
-	"github.com/ishola-faazele/taskflow/pkg/utils"
+	"github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
 )
 
 type ProjectHandler struct {
 	service   *ProjectService
-	responder *utils.APIResponder
+	responder *domain_errors.APIResponder
 }
 
 func NewProjectHandler(db *sql.DB) *ProjectHandler {
 	service := NewProjectService(NewPostgresProjectRepository(db))
-	responder := utils.NewAPIResponder()
+	responder := domain_errors.NewAPIResponder()
 	return &ProjectHandler{
 		service:   service,
 		responder: responder,

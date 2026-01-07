@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/ishola-faazele/taskflow/internal/shared/domain_errors"
+	"github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
 )
 
 type ProjectService struct {

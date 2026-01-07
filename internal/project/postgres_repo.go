@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ishola-faazele/taskflow/internal/shared/domain_errors"
+	"github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
 )
 
 type PostgresProjectRepository struct {
