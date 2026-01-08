@@ -4,26 +4,27 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	amqp_utils "github.com/ishola-faazele/taskflow/internal/utils/amqp"
 	"github.com/ishola-faazele/taskflow/internal/utils/jwt"
 	"github.com/ishola-faazele/taskflow/pkg/utils"
 	"github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type UserService struct {
-	authRepo     AuthRepository
-	profileRepo  UserProfileRepository
-	jwtUtil      *jwt.JWTUtils
-	emailService *utils.EmailService
+	authRepo    AuthRepository
+	profileRepo UserProfileRepository
+	conn        *amqp.Connection
+	jwtUtil     *jwt.JWTUtils
 }
 
-func NewUserService(authRepo AuthRepository, profileRepo UserProfileRepository) *UserService {
+func NewUserService(authRepo AuthRepository, profileRepo UserProfileRepository, conn *amqp.Connection) *UserService {
 	jwtUtil := jwt.NewJWTUtils(jwt.DefaultTokenConfig())
-	emailService := utils.NewEmailService(utils.DefaultEmailConfig())
 	return &UserService{
-		authRepo:     authRepo,
-		profileRepo:  profileRepo,
-		jwtUtil:      jwtUtil,
-		emailService: emailService,
+		authRepo:    authRepo,
+		profileRepo: profileRepo,
+		jwtUtil:     jwtUtil,
+		conn:        conn,
 	}
 }
 
@@ -51,8 +52,18 @@ func (us *UserService) GetMagicLink(email string) domain_errors.DomainError {
 		return domain_errors.NewInternalError("FAILED_TO_GENERATE_TOKEN", token_err)
 	}
 	// send email with magic link
-	if err := us.emailService.SendMagicLink(email, authToken, "/api/user/verify?token="); err != nil {
-		return domain_errors.NewInternalError("FAILED_TO_SEND_MAGIC_LINK", err)
+	emailMsg, msgErr := amqp_utils.NewMagicLinkMessage(email, authToken, "/api/user/verify?token=")
+	if msgErr != nil {
+		return domain_errors.NewInternalError("FAILED_TO_CREATE_EMAIL_MESSAGE", msgErr)
+	}
+	// publish message to queue
+	ch, chErr := us.conn.Channel()
+	if chErr != nil {
+		return domain_errors.NewInternalError("FAILED_TO_CREATE_CHANNEL", chErr)
+	}
+
+	if err := amqp_utils.PublishEmailMessage(ch, emailMsg); err != nil {
+		return domain_errors.NewInternalError("FAILED_TO_PUBLISH_EMAIL_MESSAGE", err)
 	}
 	return nil
 }

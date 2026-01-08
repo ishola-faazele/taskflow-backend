@@ -32,8 +32,8 @@ func NewMigrationManager(db *sql.DB) *MigrationManager {
 	}
 
 	// Register all tables
-	mgr.registerWorkspaceTables()
 	mgr.registerUserTables()
+	mgr.registerWorkspaceTables()
 	mgr.registerProjectTables()
 	return mgr
 }

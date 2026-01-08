@@ -7,11 +7,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/ishola-faazele/taskflow/internal/project"
-	shared_db "github.com/ishola-faazele/taskflow/internal/shared/db"
+	shared "github.com/ishola-faazele/taskflow/internal/shared"
 	"github.com/ishola-faazele/taskflow/internal/user"
 	workspace "github.com/ishola-faazele/taskflow/internal/workspace/http"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
 )
 
@@ -20,33 +19,26 @@ func main() {
 	if err != nil {
 		log.Fatalln("Warning: .env file not found, using system environment variables")
 	}
-	db, err := sqlx.Connect("pgx", "user=taskflow_user password=taskflow_password dbname=taskflow_db sslmode=disable port=5432 host=localhost")
-	if err != nil {
-		log.Fatalln(err)
-	}
-	defer db.Close()
+	appState := shared.NewAppState()
+	defer appState.Clean()
 
-	migrationMgr := shared_db.NewMigrationManager(db.DB)
-	if err := migrationMgr.EnsureTablesExist(); err != nil {
-		log.Fatalln("Failed to ensure tables exist:", err)
-	}
-
+	// mount routes
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
 	apiRouter := chi.NewRouter()
-	apiRouter.Route("/user", func(r chi.Router) {
-		user.RegisterRoutes(r, db.DB)
-	})
 	apiRouter.Route("/workspace", func(r chi.Router) {
-		workspace.RegisterRoutes(r, db.DB)
+		workspace.RegisterRoutes(r, appState)
+	})
+	apiRouter.Route("/user", func(r chi.Router) {
+		user.RegisterRoutes(r, appState)
 	})
 	apiRouter.Route("/workspace/{ws_id}/project", func(r chi.Router) {
-		project.RegisterProjectRoutes(r, db.DB)
+		project.RegisterProjectRoutes(r, appState.DB)
 	})
 	apiRouter.Route("/workspace/{ws_id}/task", func(r chi.Router) {
-		project.RegisterTaskRoutes(r, db.DB)
+		project.RegisterTaskRoutes(r, appState.DB)
 	})
 
 	r.Mount("/api", apiRouter)

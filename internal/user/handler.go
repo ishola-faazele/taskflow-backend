@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	domain_middleware "github.com/ishola-faazele/taskflow/internal/middleware"
+	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
 )
@@ -15,10 +16,10 @@ type UserHandler struct {
 	responder *domain_errors.APIResponder
 }
 
-func NewUserHandler(db *sql.DB) *UserHandler {
+func NewUserHandler(db *sql.DB, conn *amqp.Connection) *UserHandler {
 	postgresAuthRepo := NewPostgresAuthRepository(db)
 	postgresProfileRepo := NewPostgresUserProfileRepository(db)
-	service := NewUserService(postgresAuthRepo, postgresProfileRepo)
+	service := NewUserService(postgresAuthRepo, postgresProfileRepo, conn)
 	responder := domain_errors.NewAPIResponder()
 
 	return &UserHandler{

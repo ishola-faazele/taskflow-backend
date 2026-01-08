@@ -2,15 +2,16 @@ package workspace
 
 import (
 	"log"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
+	amqp_utils "github.com/ishola-faazele/taskflow/internal/utils/amqp"
 	"github.com/ishola-faazele/taskflow/internal/utils/jwt"
 	. "github.com/ishola-faazele/taskflow/internal/workspace/entity"
 	. "github.com/ishola-faazele/taskflow/internal/workspace/repository"
 	"github.com/ishola-faazele/taskflow/pkg/utils"
 	"github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type WorkspaceService struct {
@@ -19,23 +20,18 @@ type WorkspaceService struct {
 	InvitationRepo InvitationRepository
 	jwtUtil        *jwt.JWTUtils
 	emailService   *utils.EmailService
+	conn           *amqp.Connection
 }
 
-func NewWorkspaceService(workspaceRepo WorkspaceRepository, invitationRepo InvitationRepository, membershipRepo MembershipRepository) *WorkspaceService {
-	emailConfig := utils.EmailConfig{
-		SMTPHost:    os.Getenv("SMTP_HOST"),
-		SMTPPort:    "587",
-		SenderEmail: os.Getenv("SMTP_USER"),
-		SenderName:  "TaskFlow Support",
-		AppPassword: os.Getenv("SMTP_PASS"),
-		FrontendURL: "http://localhost:3000",
-	}
+func NewWorkspaceService(workspaceRepo WorkspaceRepository, invitationRepo InvitationRepository, membershipRepo MembershipRepository, conn *amqp.Connection) *WorkspaceService {
+	emailConfig := utils.EmailConfig{}
 	return &WorkspaceService{
 		WorkspaceRepo:  workspaceRepo,
 		MembershipRepo: membershipRepo,
 		InvitationRepo: invitationRepo,
 		jwtUtil:        jwt.NewJWTUtils(jwt.DefaultTokenConfig()),
 		emailService:   utils.NewEmailService(emailConfig),
+		conn:           conn,
 	}
 }
 
@@ -139,13 +135,23 @@ func (s *WorkspaceService) CreateInvitation(invitee, inviter, ws, email string, 
 	if err != nil {
 		return nil, err
 	}
+	// generate invitation token
 	token, errToken := s.jwtUtil.GenerateInvitationToken(inv.ID, ws, inv.InviterID, inv.InviteeEmail, inv.InviteeID, string(role))
 	if errToken != nil {
 		return nil, domain_errors.NewInternalError("FAILED GENERATING INVITATION TOKEN", errToken)
 	}
-	errEmail := s.emailService.SendInvitationLink(inv.InviteeEmail, inv.WorkspaceID, string(role), token, "/api/workspace/invitation/verify?token")
+	// Publish Invitation to Queue to be sent to user
+	emailMsg, errEmail := amqp_utils.NewInvitationMessage(email, inv.WorkspaceID, string(role), token, "/api/workspace/accept?token=")
 	if errEmail != nil {
-		return nil, domain_errors.NewInternalError("FAILED SENDING INVITATION EMAIL", errEmail)
+		return nil, domain_errors.NewInternalError("FAILED_CREATING_INVITATION_EMAIL", errEmail)
+	}
+	// publish message to queue
+	ch, chErr := s.conn.Channel()
+	if chErr != nil {
+		return nil, domain_errors.NewInternalError("FAILED_TO_CREATE_CHANNEL", chErr)
+	}
+	if err := amqp_utils.PublishEmailMessage(ch, emailMsg); err != nil {
+		return nil, domain_errors.NewInternalError("FAILED_TO_PUBLISH_INVITATION_MESSAGE", err)
 	}
 	return inv, nil
 }

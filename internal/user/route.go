@@ -1,19 +1,14 @@
 package user
 
 import (
-	"database/sql"
-
-	domain_middleware "github.com/ishola-faazele/taskflow/internal/middleware"
-
 	"github.com/go-chi/chi/v5"
+	domain_middleware "github.com/ishola-faazele/taskflow/internal/middleware"
+	"github.com/ishola-faazele/taskflow/internal/shared"
 )
 
-type UserRouter struct {
-}
-
-func RegisterRoutes(r chi.Router, DB *sql.DB) {
+func RegisterRoutes(r chi.Router, as *shared.AppState) {
 	dm := domain_middleware.NewDomainMiddleware()
-	handler := NewUserHandler(DB)
+	handler := NewUserHandler(as.DB, as.AmqpConn)
 
 	// Public routes (no authentication required)
 	r.Post("/magic-link", handler.RequestMagicLink)

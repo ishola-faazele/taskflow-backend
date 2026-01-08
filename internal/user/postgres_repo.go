@@ -2,6 +2,7 @@ package user
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
 )
@@ -108,6 +109,7 @@ func (r *PostgresAuthRepository) GetByEmail(email string) (*Auth, domain_errors.
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
+		fmt.Println("ERROR FROM AUTH QUERY: %w", err)
 		return nil, domain_errors.NewDatabaseError("AUTH_QUERY", err)
 	}
 

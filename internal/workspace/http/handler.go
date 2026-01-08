@@ -10,6 +10,7 @@ import (
 	. "github.com/ishola-faazele/taskflow/internal/workspace/entity"
 	. "github.com/ishola-faazele/taskflow/internal/workspace/service"
 	"github.com/ishola-faazele/taskflow/pkg/utils/domain_errors"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type WorkspaceHandler struct {
@@ -17,11 +18,11 @@ type WorkspaceHandler struct {
 	responder *domain_errors.APIResponder
 }
 
-func NewWorkspaceHandler(db *sql.DB) *WorkspaceHandler {
+func NewWorkspaceHandler(db *sql.DB, conn *amqp.Connection) *WorkspaceHandler {
 	workspaceRepo := NewPostgresWorkspaceRepository(db)
 	invitationRepo := NewPostgresInvitationRepository(db)
 	membershipRepo := NewPostgresMembershipRepository(db)
-	service := NewWorkspaceService(workspaceRepo, invitationRepo, membershipRepo)
+	service := NewWorkspaceService(workspaceRepo, invitationRepo, membershipRepo, conn)
 	responder := domain_errors.NewAPIResponder()
 
 	return &WorkspaceHandler{

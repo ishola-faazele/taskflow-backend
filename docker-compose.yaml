@@ -13,8 +13,25 @@ services:
       - postgres_data:/var/lib/postgresql/data/pgdata
     networks:
       - taskflow_backend_net
+  rabbitmq:
+    image: rabbitmq:latest
+    container_name: taskflow_rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5673:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq/mnesia
+      - rabbitmq_logs:/var/log/rabbitmq
 volumes:
   postgres_data:
+  rabbitmq_data:
+    driver: local
+  rabbitmq_logs:
+    driver: local
 
 networks:
   taskflow_backend_net:

@@ -1,16 +1,14 @@
 package workspace
 
 import (
-	"database/sql"
-
-	domain_middleware "github.com/ishola-faazele/taskflow/internal/middleware"
-
 	"github.com/go-chi/chi/v5"
+	domain_middleware "github.com/ishola-faazele/taskflow/internal/middleware"
+	"github.com/ishola-faazele/taskflow/internal/shared"
 )
 
-func RegisterRoutes(r chi.Router, DB *sql.DB) {
+func RegisterRoutes(r chi.Router, as *shared.AppState) {
 	dm := domain_middleware.NewDomainMiddleware()
-	handler := NewWorkspaceHandler(DB)
+	handler := NewWorkspaceHandler(as.DB, as.AmqpConn)
 	r.Use(dm.Authenticate)
 
 	// Workspace routes
